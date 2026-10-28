@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-securescan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securescan}
+      POSTGRES_DB: ${POSTGRES_DB:-securescan}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securescan}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-securescan}:${POSTGRES_PASSWORD:-securescan}@db:5432/${POSTGRES_DB:-securescan}
+      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      CORS_ORIGINS: http://localhost:5173
+      REPORTS_DIR: /code/reportes_generados
+      # Candado del servidor: con "false", ninguna configuración web puede habilitar escaneos a IP públicas.
+      ALLOW_PUBLIC_SCANS: ${ALLOW_PUBLIC_SCANS:-false}
+      # OWASP ZAP (análisis de la aplicación web). Si se quita ZAP_URL, la plataforma funciona solo con Nmap.
+      ZAP_URL: http://zap:8080
+      ZAP_API_KEY: ${ZAP_API_KEY:-cambia-esta-clave-de-zap}
+    volumes:
+      - reportes_data:/code/reportes_generados   # los PDF sobreviven a reinicios
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      zap:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_USE_MOCK: "false"   # usa la API real (con "true" la interfaz corre con datos de ejemplo)
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  # OWASP ZAP en modo "daemon": solo el backend lo usa, por la red interna (no se publica ningún puerto).
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8080
+      -config api.key=${ZAP_API_KEY:-cambia-esta-clave-de-zap}
+      -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+
+  # Aplicación vulnerable de laboratorio (OWASP Juice Shop): objetivo de pruebas AUTORIZADO.
+  # Dentro de la red de Docker se registra como activo con la URL  http://juiceshop:3000
+  juiceshop:
+    image: bkimminich/juice-shop
+    ports:
+      - "127.0.0.1:3001:3000"   # solo visible desde tu propio equipo
+
+volumes:
+  db_data:
+  reportes_data:
