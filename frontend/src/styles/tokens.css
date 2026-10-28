@@ -1,0 +1,132 @@
+/* Tokens de diseño de SecureScan. Todo color y medida sale de aquí. */
+:root,
+:root[data-theme="light"] {
+  --font-ui: "Schibsted Grotesk Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-title: "Source Serif 4 Variable", Georgia, "Times New Roman", serif;
+  --font-code: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+
+  /* Superficies */
+  --bg: #edf0f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --surface-3: #e9eef4;
+  --line: #dce2e9;
+  --line-strong: #bfc9d5;
+
+  /* Tinta */
+  --ink: #0f1d2c;
+  --ink-2: #3b4959;
+  --ink-3: #5f6e82;
+
+  /* Navegación lateral (se mantiene oscura en ambos temas) */
+  --nav: #0b2038;
+  --nav-2: #133150;
+  --nav-line: #1c3a5c;
+  --nav-ink: #dbe5f0;
+  --nav-ink-2: #8da3bb;
+
+  /* Acento: solo para lo interactivo */
+  --accent: #0a7c9c;
+  --accent-strong: #08657f;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0f2f7;
+  --accent-line: #9ad3e3;
+
+  /* Severidad: marca (relleno) y fondo suave. El texto siempre usa tinta. */
+  --sev-critica: #a3201a;
+  --sev-alta: #e5671a;
+  --sev-media: #f0c000;
+  --sev-baja: #3e9b63;
+  --sev-informativa: #aab5c4;
+  --sev-critica-bg: #fce9e7;
+  --sev-alta-bg: #fdecdf;
+  --sev-media-bg: #fcf3d3;
+  --sev-baja-bg: #e3f3ea;
+  --sev-informativa-bg: #eaeef3;
+
+  /* Estado de evaluación */
+  --st-pendiente: #8493a6;
+  --st-en_progreso: #0a7c9c;
+  --st-completada: #3e9b63;
+  --st-fallida: #c0261b;
+
+  --ok: #2f7d52;
+  --ok-bg: #e3f3ea;
+  --warn-bg: #fcf3d3;
+  --danger: #b42318;
+  --danger-bg: #fce9e7;
+
+  --focus: #0a7c9c;
+  --overlay: rgba(11, 32, 56, 0.5);
+  --shadow-pop: 0 12px 32px rgba(11, 32, 56, 0.18);
+
+  /* Escala tipográfica */
+  --t-xs: 0.75rem;
+  --t-sm: 0.84375rem;
+  --t-base: 0.9375rem;
+  --t-md: 1.0625rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.75rem;
+  --t-2xl: 2.125rem;
+  --t-hero: clamp(2.4rem, 4.4vw, 3.6rem);
+
+  /* Forma */
+  --r-panel: 10px;
+  --r-control: 7px;
+  --r-tile: 6px;
+
+  --nav-w: 256px;
+  --gap: 20px;
+}
+
+:root[data-theme="dark"],
+.scope-dark {
+  --bg: #0a1522;
+  --surface: #0f2033;
+  --surface-2: #132a43;
+  --surface-3: #1a3453;
+  --line: #213a57;
+  --line-strong: #31506f;
+
+  --ink: #e7eef6;
+  --ink-2: #b2c0d0;
+  --ink-3: #8497ac;
+
+  --nav: #071524;
+  --nav-2: #10283f;
+  --nav-line: #163350;
+
+  --accent: #3cc3e3;
+  --accent-strong: #6fd5ec;
+  --accent-ink: #052633;
+  --accent-soft: #0f3547;
+  --accent-line: #1f6479;
+
+  --sev-critica: #e04348;
+  --sev-alta: #f9902f;
+  --sev-media: #fde062;
+  --sev-baja: #4fc47f;
+  --sev-informativa: #8a9bb0;
+  --sev-critica-bg: #3a1a1d;
+  --sev-alta-bg: #3a2616;
+  --sev-media-bg: #3a3012;
+  --sev-baja-bg: #15301f;
+  --sev-informativa-bg: #1b2d42;
+
+  --st-pendiente: #8a9bb0;
+  --st-en_progreso: #3cc3e3;
+  --st-completada: #5cc084;
+  --st-fallida: #f0584b;
+
+  --ok: #5cc084;
+  --ok-bg: #15301f;
+  --warn-bg: #3a3012;
+  --danger: #f0786d;
+  --danger-bg: #3a1a1d;
+
+  --focus: #6fd5ec;
+  --overlay: rgba(2, 8, 16, 0.65);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.scope-dark { color: var(--ink); }
