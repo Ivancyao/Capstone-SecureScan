@@ -223,3 +223,4 @@ node_modules/
 .pytest_cache/
 reportes_generados/
 rendimiento_reportes/
+!frontend/src/lib/
