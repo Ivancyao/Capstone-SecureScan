@@ -27,12 +27,14 @@ const clearToken = () => {
 let redirigiendo = false; // evita lanzar la redirección varias veces si fallan varias consultas a la vez
 let rolActual = null; // se recuerda al pedir /auth/me, para saber si se puede listar usuarios
 
-async function llamar(path, { method = "GET", body, form } = {}) {
+async function llamar(path, { method = "GET", body, form, multipart } = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   let payload;
-  if (form) {
+  if (multipart) {
+    payload = multipart; // FormData: el navegador fija el Content-Type con su boundary
+  } else if (form) {
     payload = new URLSearchParams(form); // el login usa application/x-www-form-urlencoded
   } else if (body) {
     headers["Content-Type"] = "application/json";
@@ -120,6 +122,20 @@ export const http = {
 
   crearReporte: ({ proyecto_id, titulo, evaluacion_ids }) =>
     request(`/proyectos/${proyecto_id}/reportes`, { method: "POST", body: { titulo: titulo || null, evaluacion_ids } }),
+  cancelarEvaluacion: (id) => request(`/evaluaciones/${id}/cancelar`, { method: "POST" }),
+  eliminarEvaluacion: (id) => request(`/evaluaciones/${id}`, { method: "DELETE" }),
+  // Análisis de URL / archivo (módulo independiente de las evaluaciones)
+  analisisEstado: () => request("/analisis/estado"),
+  listarAnalisis: () => request("/analisis"),
+  obtenerAnalisis: (id) => request(`/analisis/${id}`),
+  analizarUrl: (url) => request("/analisis/url", { method: "POST", body: { url } }),
+  analizarArchivo(archivo, subir) {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("subir", subir ? "true" : "false");
+    return request("/analisis/archivo", { method: "POST", multipart: fd });
+  },
+  eliminarAnalisis: (id) => request(`/analisis/${id}`, { method: "DELETE" }),
   eliminarReporte: (id) => request(`/reportes/${id}`, { method: "DELETE" }),
   // El PDF exige el token, así que se baja con fetch y se entrega al navegador como archivo.
   async descargarReporte(reporte) {

@@ -7,7 +7,7 @@ cada usuario solo puede ver/modificar sus propios proyectos. El ADMIN puede ver 
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
@@ -23,6 +23,7 @@ from app.schemas import (
     ProyectoCreate,
     ProyectoOut,
 )
+from app.cancelacion import ETAPA_CANCELADA
 from app.scan_service import ejecutar_evaluacion
 from app.security import get_current_user
 
@@ -182,7 +183,10 @@ def listar_evaluaciones(
 
 @router.get("/evaluaciones", response_model=List[EvaluacionOut])
 def listar_todas_las_evaluaciones(
+    response: Response,
     ultimas: Optional[int] = Query(default=None, ge=1, le=200, description="Solo las N evaluaciones más recientes de cada activo"),
+    pagina: Optional[int] = Query(default=None, ge=1, description="Número de página (desde 1). Sin este parámetro se devuelve todo."),
+    por_pagina: int = Query(default=50, ge=1, le=200, description="Evaluaciones por página; solo se usa junto con `pagina`"),
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
@@ -191,9 +195,14 @@ def listar_todas_las_evaluaciones(
     Con `ultimas=N` se limita a las N más recientes de cada activo: así la respuesta no crece
     sin límite a medida que se acumula historial (el detalle de una evaluación antigua sigue
     disponible en GET /evaluaciones/{id}).
+
+    Con `pagina` (y opcionalmente `por_pagina`) la respuesta se entrega por páginas y el total
+    de evaluaciones que cumplen el filtro viaja en la cabecera `X-Total-Count`.
     """
     ids = _ids_de_proyectos_visibles(db, user)
     if not ids:
+        if pagina is not None:
+            response.headers["X-Total-Count"] = "0"
         return []
     q = (
         db.query(Evaluacion)
@@ -211,11 +220,11 @@ def listar_todas_las_evaluaciones(
             .subquery()
         )
         q = q.filter(Evaluacion.id.in_(db.query(ranking.c.id).filter(ranking.c.rn <= ultimas)))
-    return (
-        q.options(selectinload(Evaluacion.hallazgos))  # una consulta para todos los hallazgos (evita N+1)
-        .order_by(Evaluacion.iniciada_en.desc())
-        .all()
-    )
+    q = q.order_by(Evaluacion.iniciada_en.desc(), Evaluacion.id)  # el id desempata para que las páginas sean estables
+    if pagina is not None:
+        response.headers["X-Total-Count"] = str(q.order_by(None).count())
+        q = q.offset((pagina - 1) * por_pagina).limit(por_pagina)
+    return q.options(selectinload(Evaluacion.hallazgos)).all()  # una consulta para todos los hallazgos (evita N+1)
 
 
 @router.get("/evaluaciones/{evaluacion_id}", response_model=EvaluacionOut)
@@ -229,6 +238,48 @@ def obtener_evaluacion(
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
     _get_activo_or_404(db, evaluacion.activo_id, user)
     return evaluacion
+
+
+@router.post("/evaluaciones/{evaluacion_id}/cancelar", response_model=EvaluacionOut)
+def cancelar_evaluacion(
+    evaluacion_id: str,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    """
+    Cancela una evaluación pendiente o en curso. Queda registrada como fallida con la etapa
+    "Cancelada"; el proceso de fondo detiene Nmap/ZAP y descarta los resultados parciales.
+    """
+    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
+    if not evaluacion:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+    _get_activo_or_404(db, evaluacion.activo_id, user)
+    if evaluacion.estado not in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
+        raise HTTPException(status_code=409, detail="La evaluación ya terminó; no hay nada que cancelar.")
+    evaluacion.estado = EstadoEvaluacion.FALLIDA
+    evaluacion.etapa = ETAPA_CANCELADA
+    evaluacion.detalle_error = "Cancelada por el usuario."
+    evaluacion.finalizada_en = datetime.utcnow()
+    db.commit()
+    db.refresh(evaluacion)
+    return evaluacion
+
+
+@router.delete("/evaluaciones/{evaluacion_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_evaluacion(
+    evaluacion_id: str,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    """Elimina una evaluación y sus hallazgos. Si está en curso hay que cancelarla primero."""
+    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
+    if not evaluacion:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+    _get_activo_or_404(db, evaluacion.activo_id, user)
+    if evaluacion.estado in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
+        raise HTTPException(status_code=409, detail="La evaluación está en curso: cancélala antes de eliminarla.")
+    db.delete(evaluacion)  # los hallazgos se eliminan en cascada
+    db.commit()
 
 
 # ---------------- Hallazgos ----------------

@@ -239,6 +239,7 @@ def test_la_configuracion_llega_al_escaner(admin, monkeypatch):
     monkeypatch.setattr(scanner, "escanear_puertos", lambda ip, **kw: recibido.update(kw) or [])
     _, a = crear_activo(admin, url="http://localhost:3000")
     client.post(f"/activos/{a['id']}/evaluaciones", headers=admin)
+    assert callable(recibido.pop("cancelar"))  # Nmap recibe la señal de cancelación
     assert recibido == {"perfil": "completo", "timeout": 77, "versiones": False}
 
 
@@ -445,3 +446,118 @@ def test_evaluaciones_con_limite_por_activo(admin):
     assert client.get("/evaluaciones?ultimas=0", headers=admin).status_code == 422
     # El detalle de una evaluación antigua sigue disponible
     assert client.get(f"/evaluaciones/{ids_a[0]}", headers=admin).status_code == 200
+
+
+def test_evaluaciones_paginadas(admin):
+    _, a = crear_activo(admin, nombre="Uno")
+    ids = [evaluacion_completada(a["id"], hace_dias=d) for d in (50, 40, 30, 20, 10)]  # la más reciente es la última
+    r1 = client.get("/evaluaciones?pagina=1&por_pagina=2", headers=admin)
+    assert r1.status_code == 200
+    assert r1.headers["X-Total-Count"] == "5"
+    assert [e["id"] for e in r1.json()] == [ids[4], ids[3]]
+    r3 = client.get("/evaluaciones?pagina=3&por_pagina=2", headers=admin)
+    assert [e["id"] for e in r3.json()] == [ids[0]]  # última página, incompleta
+    assert client.get("/evaluaciones?pagina=9&por_pagina=2", headers=admin).json() == []  # más allá del final
+    # Sin `pagina` el comportamiento anterior no cambia: todo, sin cabecera de total
+    sin = client.get("/evaluaciones", headers=admin)
+    assert len(sin.json()) == 5 and "X-Total-Count" not in sin.headers
+    # Se combina con `ultimas`: el total cuenta solo lo que pasa el filtro
+    comb = client.get("/evaluaciones?ultimas=3&pagina=1&por_pagina=2", headers=admin)
+    assert comb.headers["X-Total-Count"] == "3" and len(comb.json()) == 2
+    assert client.get("/evaluaciones?pagina=0", headers=admin).status_code == 422
+    assert client.get("/evaluaciones?pagina=1&por_pagina=201", headers=admin).status_code == 422
+
+
+def test_evaluaciones_paginadas_respetan_propiedad(admin, ana):
+    _, a = crear_activo(admin, nombre="Del admin")
+    evaluacion_completada(a["id"])
+    r = client.get("/evaluaciones?pagina=1", headers=ana)  # Ana no ve el activo del admin
+    assert r.json() == [] and r.headers["X-Total-Count"] == "0"
+    assert client.get("/evaluaciones?pagina=1", headers=admin).headers["X-Total-Count"] == "1"
+
+
+# ---------------- Cancelar y eliminar evaluaciones ----------------
+def evaluacion_en_curso(activo_id, estado=EstadoEvaluacion.EN_PROGRESO):
+    db = SessionLocal()
+    ev = Evaluacion(activo_id=activo_id, estado=estado, progreso=30, etapa="Escaneando puertos y servicios")
+    db.add(ev)
+    db.commit()
+    eid = ev.id
+    db.close()
+    return eid
+
+
+def test_cancelar_evaluacion_en_curso(admin):
+    _, a = crear_activo(admin, nombre="Cancelable")
+    eid = evaluacion_en_curso(a["id"])
+    r = client.post(f"/evaluaciones/{eid}/cancelar", headers=admin)
+    assert r.status_code == 200
+    j = r.json()
+    assert j["estado"] == "fallida" and j["etapa"] == "Cancelada" and j["finalizada_en"]
+    # Una vez cancelada, el activo queda libre para evaluar de nuevo
+    assert client.post(f"/evaluaciones/{eid}/cancelar", headers=admin).status_code == 409  # ya terminó
+
+
+def test_cancelar_evaluacion_completada_es_409(admin):
+    _, a = crear_activo(admin, nombre="Terminada")
+    eid = evaluacion_completada(a["id"])
+    assert client.post(f"/evaluaciones/{eid}/cancelar", headers=admin).status_code == 409
+
+
+def test_eliminar_evaluacion_borra_sus_hallazgos(admin):
+    _, a = crear_activo(admin, nombre="Borrable")
+    eid = evaluacion_completada(a["id"])
+    assert client.delete(f"/evaluaciones/{eid}", headers=admin).status_code == 204
+    assert client.get(f"/evaluaciones/{eid}", headers=admin).status_code == 404
+    db = SessionLocal()
+    assert db.query(Hallazgo).filter(Hallazgo.evaluacion_id == eid).count() == 0
+    db.close()
+
+
+def test_no_se_elimina_una_evaluacion_en_curso(admin):
+    _, a = crear_activo(admin, nombre="EnCurso")
+    eid = evaluacion_en_curso(a["id"], EstadoEvaluacion.PENDIENTE)
+    r = client.delete(f"/evaluaciones/{eid}", headers=admin)
+    assert r.status_code == 409 and "cancélala" in r.json()["detail"]
+    client.post(f"/evaluaciones/{eid}/cancelar", headers=admin)
+    assert client.delete(f"/evaluaciones/{eid}", headers=admin).status_code == 204
+
+
+def test_cancelar_y_eliminar_respetan_la_propiedad(admin, ana):
+    _, a = crear_activo(admin, nombre="Ajeno")
+    en_curso = evaluacion_en_curso(a["id"])
+    terminada = evaluacion_completada(a["id"])
+    assert client.post(f"/evaluaciones/{en_curso}/cancelar", headers=ana).status_code == 404
+    assert client.delete(f"/evaluaciones/{terminada}", headers=ana).status_code == 404
+    assert client.post("/evaluaciones/no-existe/cancelar", headers=admin).status_code == 404
+
+
+def test_la_tarea_de_fondo_se_detiene_si_la_evaluacion_fue_cancelada(admin, monkeypatch):
+    """La evaluación se cancela mientras Nmap corre: no se guardan resultados ni se vuelve a 'completada'."""
+    from app import scan_service
+
+    _, a = crear_activo(admin, url="http://localhost:3000", nombre="Carrera")
+    eid = evaluacion_en_curso(a["id"], EstadoEvaluacion.PENDIENTE)
+    monkeypatch.setattr(scanner, "resolver_y_validar", lambda host, permitir_publicos=None: "127.0.0.1")
+
+    def nmap_largo(ip, cancelar=None, **kw):
+        client.post(f"/evaluaciones/{eid}/cancelar", headers=admin)  # el usuario cancela durante el escaneo
+        assert cancelar() is True  # Nmap recibe la señal
+        from app.cancelacion import EvaluacionCancelada
+        raise EvaluacionCancelada()
+
+    monkeypatch.setattr(scanner, "escanear_puertos", nmap_largo)
+    scan_service.ejecutar_evaluacion(eid)
+    j = client.get(f"/evaluaciones/{eid}", headers=admin).json()
+    assert j["estado"] == "fallida" and j["etapa"] == "Cancelada" and j["hallazgos"] == []
+
+
+def test_una_evaluacion_cancelada_en_cola_no_arranca(admin, monkeypatch):
+    from app import scan_service
+
+    _, a = crear_activo(admin, nombre="EnCola")
+    eid = evaluacion_en_curso(a["id"], EstadoEvaluacion.PENDIENTE)
+    client.post(f"/evaluaciones/{eid}/cancelar", headers=admin)
+    monkeypatch.setattr(scanner, "escanear_puertos", lambda *a, **k: pytest.fail("no debía escanear"))
+    scan_service.ejecutar_evaluacion(eid)
+    assert client.get(f"/evaluaciones/{eid}", headers=admin).json()["etapa"] == "Cancelada"

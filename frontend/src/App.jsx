@@ -11,6 +11,8 @@ import { Proyectos, ProyectoDetalle } from "./pages/Proyectos.jsx";
 import { Activos, ActivoDetalle } from "./pages/Activos.jsx";
 import { Evaluaciones, NuevaEvaluacion, EvaluacionDetalle } from "./pages/Evaluaciones.jsx";
 import { Hallazgos, HallazgoDetalle } from "./pages/Hallazgos.jsx";
+import { Analisis } from "./pages/Analisis.jsx";
+import { Comparar } from "./pages/Comparar.jsx";
 import { Reportes, ReporteVista } from "./pages/Reportes.jsx";
 import { Usuarios, Configuracion } from "./pages/Admin.jsx";
 import { Perfil, Ayuda } from "./pages/Cuenta.jsx";
@@ -60,6 +62,8 @@ export default function App() {
         <Route path="/evaluaciones" element={<Evaluaciones />} />
         <Route path="/evaluaciones/nueva" element={<NuevaEvaluacion />} />
         <Route path="/evaluaciones/:id" element={<EvaluacionDetalle />} />
+        <Route path="/evaluaciones/:id/comparar" element={<Comparar />} />
+        <Route path="/analisis" element={<Analisis />} />
         <Route path="/hallazgos" element={<Hallazgos />} />
         <Route path="/hallazgos/:id" element={<HallazgoDetalle />} />
         <Route path="/reportes" element={<Reportes />} />

@@ -16,7 +16,7 @@ Correcciones: (1) los hallazgos se cargan en una sola consulta adicional; (2) el
 
 ## Limitaciones de esta medición
 
-- Se hizo sobre **SQLite**, en memoria de archivo local y sin red. PostgreSQL con red real dará otros números; el script `backend/tools/rendimiento.py` se puede ejecutar tal cual contra PostgreSQL con `DATABASE_URL`.
+- Esta medición se hizo sobre **SQLite**, en archivo local y sin red. El 08-11-2026 se repitió sobre PostgreSQL 16 y dio resultados equivalentes (ver `rendimiento_postgresql.md`); el script `backend/tools/rendimiento.py` se puede ejecutar contra PostgreSQL con `DATABASE_URL` (usa una base de pruebas: borra y recrea las tablas).
 - El tamaño de la escala grande (300 activos, 27.000 hallazgos) supera lo esperable para una pyme; sirve para ver cómo crece el costo, no como carga real.
 - Medido con un solo usuario; no es una prueba de concurrencia.
 - Pendiente a futuro: paginar `GET /evaluaciones` y consultar solo las evaluaciones en curso mientras se espera un escaneo.
@@ -61,3 +61,18 @@ Correcciones: (1) los hallazgos se cargan en una sola consulta adicional; (2) el
 | GET /evaluaciones?ultimas=10 | 479.2 | 547.0 | 562.3 | 7136 KB |
 | GET /evaluaciones | 1005.0 | 1125.2 | 1167.5 | 14101 KB |
 | POST /proyectos/{id}/reportes (PDF, 10 evaluaciones) | 119 | — | — | 7 KB |
+
+
+## Paginación de `GET /evaluaciones` (09-11-2026)
+
+Se agregaron los parámetros `pagina` y `por_pagina` (máx. 200); el total viaja en la cabecera `X-Total-Count`. Sin `pagina` la respuesta es la de siempre. Medición en el mismo equipo y con la misma semilla (SQLite, mediana de 15 repeticiones, ms):
+
+| Endpoint (escala grande, 6.000 evaluaciones) | Mediana | p95 | Tamaño respuesta |
+|---|---|---|---|
+| `GET /evaluaciones` (todo) | 1.933 | 2.231 | 14.101 KB |
+| `GET /evaluaciones?ultimas=10` | 810 | 1.135 | 7.136 KB |
+| `GET /evaluaciones?pagina=1&por_pagina=50` | 28,2 | 31,5 | 109 KB |
+| `GET /evaluaciones?pagina=60&por_pagina=50` | 30,5 | 34,1 | 110 KB |
+
+Con 1.000 evaluaciones la primera página tarda 18,4 ms (contra 203,8 ms de `?ultimas=10`). El tiempo ya no crece con el volumen total, solo con el tamaño de la página, y queda muy por debajo del límite de 1 s del RNF-07.
+Nota: en esta corrida el equipo estuvo más cargado que en la anterior (listado completo 1.933 ms frente a 1.005 ms), por lo que las cifras de esta sección solo se comparan entre sí.

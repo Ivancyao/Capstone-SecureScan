@@ -5,9 +5,9 @@ export const useTheme = () => useContext(ThemeCtx);
 
 const leer = () => {
   try {
-    return localStorage.getItem("securescan-tema") || "sistema";
+    return localStorage.getItem("securescan-tema") || "oscuro";
   } catch {
-    return "sistema";
+    return "oscuro";
   }
 };
 

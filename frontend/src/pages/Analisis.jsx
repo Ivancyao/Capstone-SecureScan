@@ -1,0 +1,317 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../components/Icon.jsx";
+import { Aviso, EmptyState, PageHeader, Panel, Progress, Segmented, SevBadge, useTitulo } from "../components/ui.jsx";
+import { useToast } from "../context/ToastContext.jsx";
+import { fmtFechaHora, fmtKb, hace } from "../lib/format.js";
+import { api } from "../services/index.js";
+
+const VEREDICTOS = {
+  malicioso: { texto: "Peligroso", color: "var(--sev-critica)", fondo: "var(--sev-critica-bg)", icono: "alert" },
+  sospechoso: { texto: "Sospechoso", color: "var(--sev-media)", fondo: "var(--sev-media-bg)", icono: "alert" },
+  limpio: { texto: "Sin detecciones", color: "var(--ok)", fondo: "var(--ok-bg)", icono: "check" },
+  sin_datos: { texto: "Sin veredicto", color: "var(--ink-3)", fondo: "var(--surface-2)", icono: "info" },
+};
+const NIVEL_SEV = { alto: "alta", medio: "media", bajo: "baja" };
+const SEV_CAB = { alta: "alta", media: "media", baja: "baja" };
+
+function Veredicto({ valor, grande = false }) {
+  const v = VEREDICTOS[valor] || VEREDICTOS.sin_datos;
+  return (
+    <span className={`veredicto ${grande ? "grande" : ""}`} style={{ "--v-color": v.color, "--v-fondo": v.fondo }}>
+      <Icon name={v.icono} size={grande ? 20 : 14} />
+      {v.texto}
+    </span>
+  );
+}
+
+function Resultado({ a }) {
+  const d = a.detalle || {};
+  const vt = d.virustotal;
+  const cab = d.cabeceras;
+  const copiar = () => navigator.clipboard?.writeText(a.sha256).catch(() => {});
+  return (
+    <div className="analisis-resultado">
+      <div className="analisis-cabecera">
+        <Veredicto valor={a.veredicto} grande />
+        <div>
+          <p className="analisis-resumen">{a.resumen}</p>
+          <p className="small muted analisis-objetivo">
+            <Icon name={a.tipo === "url" ? "globe" : "file"} size={14} /> {a.objetivo}
+            {a.tamano_bytes != null && <span> · {fmtKb(Math.max(1, Math.round(a.tamano_bytes / 1024)))}</span>}
+          </p>
+        </div>
+      </div>
+
+      {a.sha256 && (
+        <p className="small analisis-hash">
+          <span className="muted">SHA-256</span> <code>{a.sha256}</code>
+          <button className="btn btn-quiet btn-icon btn-sm" onClick={copiar} aria-label="Copiar huella SHA-256" title="Copiar">
+            <Icon name="copy" size={14} />
+          </button>
+        </p>
+      )}
+
+      {(d.avisos || []).map((t, i) => (
+        <Aviso key={i} tipo="info">{t}</Aviso>
+      ))}
+
+      {vt && (
+        <section className="analisis-bloque">
+          <h3 className="h-section">Motores antivirus (VirusTotal)</h3>
+          <div className="vt-barra" role="img" aria-label={`${vt.malicioso} maliciosos, ${vt.sospechoso} sospechosos, ${vt.inofensivo} inofensivos, ${vt.sin_deteccion} sin detección`}>
+            <i style={{ flex: vt.malicioso, background: "var(--sev-critica)" }} />
+            <i style={{ flex: vt.sospechoso, background: "var(--sev-media)" }} />
+            <i style={{ flex: vt.inofensivo, background: "var(--ok)" }} />
+            <i style={{ flex: vt.sin_deteccion, background: "var(--line-strong)" }} />
+          </div>
+          <p className="small">
+            <strong className="num">{vt.malicioso + vt.sospechoso}</strong> de <span className="num">{vt.motores}</span> motores lo marcan como peligroso o sospechoso.
+          </p>
+          {vt.detecciones?.length > 0 && (
+            <ul className="vt-lista">
+              {vt.detecciones.map((x) => (
+                <li key={x.motor}>
+                  <span>{x.motor}</span>
+                  <code>{x.resultado}</code>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {d.senales?.length > 0 && (
+        <section className="analisis-bloque">
+          <h3 className="h-section">Indicadores locales</h3>
+          <ul className="senales">
+            {d.senales.map((s) => (
+              <li key={s.codigo}>
+                <SevBadge sev={NIVEL_SEV[s.nivel] || "informativa"} />
+                <span>{s.texto}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {cab && (
+        <section className="analisis-bloque">
+          <h3 className="h-section">Cabeceras de seguridad del sitio</h3>
+          {!cab.contactado ? (
+            <p className="small muted">{cab.motivo}</p>
+          ) : cab.hallazgos.length === 0 ? (
+            <p className="small">El sitio respondió (HTTP {cab.codigo_http}) y trae las cabeceras de seguridad básicas.</p>
+          ) : (
+            <ul className="senales">
+              {cab.hallazgos.map((h, i) => (
+                <li key={i}>
+                  <SevBadge sev={SEV_CAB[h.severidad] || "baja"} />
+                  <span>
+                    <strong>{h.titulo}.</strong> {h.detalle}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+export function Analisis() {
+  useTitulo("Análisis rápido");
+  const toast = useToast();
+  const [modo, setModo] = useState("url");
+  const [url, setUrl] = useState("");
+  const [archivo, setArchivo] = useState(null);
+  const [subir, setSubir] = useState(false);
+  const [arrastrando, setArrastrando] = useState(false);
+  const [estado, setEstado] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [actual, setActual] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const inputRef = useRef(null);
+  const sondeo = useRef(null);
+
+  const cargarHistorial = useCallback(async () => {
+    try {
+      setHistorial(await api.listarAnalisis());
+    } catch (e) {
+      toast.error("No se pudo cargar el historial", e.message);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    api.analisisEstado().then(setEstado).catch(() => setEstado({ virustotal: false, max_mb: 20 }));
+    cargarHistorial();
+    return () => clearTimeout(sondeo.current);
+  }, [cargarHistorial]);
+
+  const seguir = useCallback(
+    (id) => {
+      const paso = async () => {
+        try {
+          const a = await api.obtenerAnalisis(id);
+          setActual(a);
+          if (a.estado === "pendiente") {
+            sondeo.current = setTimeout(paso, 1500);
+          } else {
+            setEnviando(false);
+            cargarHistorial();
+          }
+        } catch (e) {
+          setEnviando(false);
+          toast.error("No se pudo consultar el análisis", e.message);
+        }
+      };
+      paso();
+    },
+    [cargarHistorial, toast]
+  );
+
+  const analizar = async (ev) => {
+    ev.preventDefault();
+    clearTimeout(sondeo.current);
+    setEnviando(true);
+    setActual(null);
+    try {
+      const a = modo === "url" ? await api.analizarUrl(url.trim()) : await api.analizarArchivo(archivo, subir);
+      setActual(a);
+      if (a.estado === "pendiente") seguir(a.id);
+      else {
+        setEnviando(false);
+        cargarHistorial();
+      }
+    } catch (e) {
+      setEnviando(false);
+      toast.error("No se pudo iniciar el análisis", e.message);
+    }
+  };
+
+  const elegir = (f) => {
+    if (!f) return;
+    if (estado && f.size > estado.max_mb * 1024 * 1024) {
+      toast.error("Archivo demasiado grande", `El máximo es ${estado.max_mb} MB.`);
+      return;
+    }
+    setArchivo(f);
+  };
+
+  const eliminar = async (a) => {
+    if (!window.confirm(`¿Eliminar el análisis de «${a.objetivo}»?`)) return;
+    try {
+      await api.eliminarAnalisis(a.id);
+      if (actual?.id === a.id) setActual(null);
+      cargarHistorial();
+      toast.ok("Análisis eliminado");
+    } catch (e) {
+      toast.error("No se pudo eliminar", e.message);
+    }
+  };
+
+  const listo = modo === "url" ? /^https?:\/\/\S+/i.test(url.trim()) : !!archivo;
+
+  return (
+    <>
+      <PageHeader
+        titulo="Análisis rápido"
+        descripcion="Pega una URL o sube un archivo para saber si tiene señales de malware, phishing o mala configuración. Es distinto de una evaluación: no escanea puertos ni vulnerabilidades."
+      />
+
+      {estado && !estado.virustotal && (
+        <Aviso tipo="warn">
+          VirusTotal no está configurado en el servidor, así que solo verás indicadores locales (sin la opinión de los motores antivirus). El administrador puede activarlo definiendo <code>VIRUSTOTAL_API_KEY</code>.
+        </Aviso>
+      )}
+
+      <div className="grid-main">
+        <Panel titulo="¿Qué quieres revisar?">
+          <form onSubmit={analizar} className="stack">
+            <Segmented
+              etiqueta="Tipo de análisis"
+              valor={modo}
+              onChange={(v) => setModo(v)}
+              opciones={[
+                { valor: "url", etiqueta: "URL" },
+                { valor: "archivo", etiqueta: "Archivo" },
+              ]}
+            />
+
+            {modo === "url" ? (
+              <div className="field">
+                <label htmlFor="an-url">Dirección del sitio o enlace</label>
+                <input id="an-url" className="input" type="url" inputMode="url" placeholder="https://ejemplo.cl/descarga" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off" />
+                <span className="hint">La reputación se consulta sin tocar el sitio. Las cabeceras de seguridad solo se leen si el sitio está en una red permitida (misma regla que las evaluaciones).</span>
+              </div>
+            ) : (
+              <>
+                <div
+                  className={`dropzone ${arrastrando ? "on" : ""} ${archivo ? "con-archivo" : ""}`}
+                  onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+                  onDragLeave={() => setArrastrando(false)}
+                  onDrop={(e) => { e.preventDefault(); setArrastrando(false); elegir(e.dataTransfer.files?.[0]); }}
+                >
+                  <Icon name={archivo ? "file" : "download"} size={26} />
+                  {archivo ? (
+                    <p><strong>{archivo.name}</strong><br /><span className="small muted">{fmtKb(Math.max(1, Math.round(archivo.size / 1024)))}</span></p>
+                  ) : (
+                    <p>Arrastra un archivo aquí<br /><span className="small muted">o elígelo desde tu equipo (máx. {estado?.max_mb ?? 20} MB)</span></p>
+                  )}
+                  <input ref={inputRef} id="an-archivo" type="file" className="visually-hidden" onChange={(e) => elegir(e.target.files?.[0])} />
+                  <button type="button" className="btn btn-sm" onClick={() => inputRef.current?.click()}>{archivo ? "Cambiar archivo" : "Elegir archivo"}</button>
+                </div>
+                <label className="check">
+                  <input type="checkbox" checked={subir} onChange={(e) => setSubir(e.target.checked)} />
+                  <span>
+                    Si VirusTotal no conoce el archivo, permitir que lo reciba para analizarlo
+                    <span className="hint block">Lo que se sube pasa a ser visible para la comunidad de seguridad. No lo marques con documentos privados. Si no lo marcas, solo se consulta su huella SHA-256.</span>
+                  </span>
+                </label>
+              </>
+            )}
+
+            <div>
+              <button className="btn btn-primary" type="submit" disabled={!listo || enviando}>
+                <Icon name="search" size={16} /> {enviando ? "Analizando…" : "Analizar"}
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel titulo="Resultado">
+          {enviando && actual?.estado !== "completado" && (
+            <div className="stack-sm">
+              <Progress indeterminado etiqueta="Analizando" />
+              <p className="small muted">Consultando fuentes. Si VirusTotal debe analizar el elemento por primera vez, puede tardar hasta un minuto.</p>
+            </div>
+          )}
+          {!enviando && !actual && <EmptyState icono="shield" titulo="Aún no hay un análisis" texto="El resultado aparece aquí en cuanto termina." />}
+          {actual && actual.estado !== "pendiente" && <Resultado a={actual} />}
+        </Panel>
+      </div>
+
+      <Panel titulo="Historial" descripcion="Solo tú ves estos análisis. Los archivos no se guardan: solo su huella y el resultado.">
+        {historial.length === 0 ? (
+          <EmptyState icono="clock" titulo="Sin análisis todavía" texto="Los que hagas quedarán registrados aquí." />
+        ) : (
+          <ul className="historial">
+            {historial.map((a) => (
+              <li key={a.id}>
+                <button className="historial-main" onClick={() => setActual(a)} aria-label={`Ver análisis de ${a.objetivo}`}>
+                  <Icon name={a.tipo === "url" ? "globe" : "file"} size={16} />
+                  <span className="historial-obj">{a.objetivo}</span>
+                  <Veredicto valor={a.veredicto || "sin_datos"} />
+                  <time className="small muted" dateTime={a.creado_en} title={fmtFechaHora(a.creado_en)}>{hace(a.creado_en)}</time>
+                </button>
+                <button className="btn btn-quiet btn-icon btn-sm" onClick={() => eliminar(a)} aria-label={`Eliminar análisis de ${a.objetivo}`} title="Eliminar">
+                  <Icon name="trash" size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </>
+  );
+}

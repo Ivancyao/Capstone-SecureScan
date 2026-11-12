@@ -19,7 +19,8 @@ from app import scanner, zap_client
 from app.database import Base, engine
 from app.main import app
 from app.models import Hallazgo
-from app.zap_client import ZapClient, ZapError, agrupar_alertas
+from app.zap_client import ZapClient, ZapError, agrupar_alertas, severidad_zap
+from app.zap_es import CATALOGO, traducir
 
 client = TestClient(app)
 KEY = "clave-zap"
@@ -158,7 +159,8 @@ def test_categoria_owasp_desde_etiquetas():
 
 
 def test_html_se_limpia_y_los_textos_se_acotan():
-    h = agrupar_alertas([alerta(solution="<p>Haz <b>esto</b></p><p>y aquello</p>", description="x" * 5000)])[0]
+    # una alerta fuera del catálogo en español conserva el texto de ZAP (limpiado de HTML)
+    h = agrupar_alertas([alerta("Alerta fuera del catalogo", "99999", 1, solution="<p>Haz <b>esto</b></p><p>y aquello</p>", description="x" * 5000)])[0]
     assert "<" not in h["recomendacion"] and h["recomendacion"] == "Haz esto y aquello"
     assert len(h["evidencia"]) <= 1500
 
@@ -293,3 +295,61 @@ def test_la_configuracion_de_zap_solo_se_activa_si_el_servidor_lo_tiene(monkeypa
     monkeypatch.setenv("ZAP_URL", "http://zap:8080")
     assert client.get("/configuracion", headers=h).json()["motores"]["zap"]["disponible"] is True
     assert client.put("/configuracion", json=cfg, headers=h).status_code == 200
+
+
+# --- Regresión: el API real de ZAP entrega "risk" como texto y puede no traer "riskcode" ---
+def test_severidad_se_lee_del_texto_cuando_no_hay_riskcode():
+    real = {"alert": "CSP Header Not Set", "pluginId": "10038", "risk": "Medium", "url": "http://x/"}
+    assert severidad_zap(real) == "media"
+    for texto, esperado in [("High", "alta"), ("Medium", "media"), ("Low", "baja"), ("Informational", "informativa")]:
+        assert severidad_zap({"risk": texto}) == esperado
+    assert severidad_zap({}) == "informativa"
+    assert severidad_zap({"risk": "Critical"}) == "informativa"  # ZAP nunca produce crítica
+
+
+def test_agrupar_alertas_sin_riskcode_conserva_el_nivel():
+    real = {"alert": "Cross-Domain Misconfiguration", "pluginId": "10098", "risk": "Medium", "url": "http://x/a",
+            "param": "", "evidence": "", "description": "", "solution": "", "tags": {}}
+    h = agrupar_alertas([real])[0]
+    assert h["severidad"].value == "media" and h["cvss_score"] == 5.3
+
+
+def test_riskcode_numerico_sigue_funcionando():
+    assert severidad_zap({"riskcode": "3", "risk": "x"}) == "alta"
+
+
+# --- Textos en español ---
+def test_alerta_conocida_se_muestra_en_espanol():
+    h = agrupar_alertas([alerta()])[0]
+    assert h["nombre_vulnerabilidad"] == "Falta la cabecera Content-Security-Policy (CSP)"
+    assert "Política de Seguridad de Contenido" in h["evidencia"]
+    assert h["recomendacion"].startswith("Configurar el servidor")
+    assert "Content Security Policy (CSP) Header Not Set" in h["evidencia"]  # se conserva el nombre original para trazabilidad
+
+
+def test_alerta_desconocida_conserva_el_texto_original_y_lo_avisa():
+    h = agrupar_alertas([alerta("Some Brand New ZAP Rule", "55555", 2, description="<p>English text</p>", solution="<p>Fix it</p>")])[0]
+    assert h["nombre_vulnerabilidad"] == "Some Brand New ZAP Rule"
+    assert "Descripción original de ZAP (en inglés): English text" in h["evidencia"]
+    assert h["recomendacion"] == "Fix it"
+
+
+def test_catalogo_es_consistente():
+    assert len(CATALOGO) >= 30
+    for clave, (nombre, descripcion, recomendacion) in CATALOGO.items():
+        assert clave == clave.lower().strip()
+        assert nombre and descripcion and recomendacion
+        assert "<" not in descripcion and "<" not in recomendacion
+    assert traducir({"alert": "  Content Security Policy (CSP)  Header Not Set "}) is not None
+    assert traducir({"alert": "Regla inexistente"}) is None
+
+
+def test_zap_se_detiene_al_cancelar_la_evaluacion():
+    from app.cancelacion import EvaluacionCancelada
+
+    llamadas = []
+    c = cliente([], llamadas=llamadas, estados_spider=(10,))  # el spider nunca termina solo
+    c.cancelar = lambda: True
+    with pytest.raises(EvaluacionCancelada):
+        c.analizar("http://10.0.0.5/")
+    assert "/JSON/spider/action/stopAllScans/" in llamadas  # se le pidió a ZAP que parara

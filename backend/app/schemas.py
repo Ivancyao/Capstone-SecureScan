@@ -187,3 +187,37 @@ class ConfiguracionIn(BaseModel):
     motores: Motores
     alcance: Alcance
     retencion_dias: int = Field(ge=0, le=3650)
+
+
+# ---------- Análisis de URL / archivo ----------
+class AnalisisUrlIn(BaseModel):
+    url: str = Field(min_length=4, max_length=2048)
+
+    @field_validator("url")
+    @classmethod
+    def _http(cls, v: str) -> str:
+        v = v.strip()
+        if not v.lower().startswith(("http://", "https://")):
+            raise ValueError("La URL debe empezar con http:// o https://")
+        return v
+
+
+class AnalisisOut(BaseModel):
+    id: str
+    tipo: str
+    objetivo: str
+    sha256: Optional[str] = None
+    tamano_bytes: Optional[int] = None
+    estado: str
+    veredicto: Optional[str] = None
+    resumen: Optional[str] = None
+    detalle: Optional[dict] = None
+    creado_en: datetime
+    finalizado_en: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AnalisisEstado(BaseModel):
+    virustotal: bool
+    max_mb: int

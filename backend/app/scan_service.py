@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from app import config_service, risk, scanner, zap_client
+from app.cancelacion import ETAPA_CANCELADA, EvaluacionCancelada
 from app.database import SessionLocal
 from app.models import EstadoEvaluacion, Evaluacion, Hallazgo
 
@@ -42,7 +43,16 @@ def url_para_zap(url_objetivo: str, ip: str, puertos: List[Dict]) -> Optional[st
     return f"{esquema}://{host}:{elegido['puerto']}/"
 
 
+def esta_cancelada(evaluacion_id: str) -> bool:
+    """True si el usuario canceló la evaluación o la eliminó. Usa una sesión propia para ver siempre el dato vigente."""
+    with SessionLocal() as s:
+        fila = s.query(Evaluacion.etapa).filter(Evaluacion.id == evaluacion_id).first()
+    return fila is None or fila[0] == ETAPA_CANCELADA
+
+
 def _avance(db, evaluacion, progreso: int, etapa: str) -> None:
+    if esta_cancelada(evaluacion.id):
+        raise EvaluacionCancelada()
     evaluacion.progreso = progreso
     evaluacion.etapa = etapa
     db.commit()
@@ -52,8 +62,9 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
     db = SessionLocal()
     try:
         evaluacion = db.get(Evaluacion, evaluacion_id)
-        if evaluacion is None:
-            return
+        if evaluacion is None or esta_cancelada(evaluacion_id):
+            return  # se canceló o eliminó mientras esperaba en la cola
+        cancelada = lambda: esta_cancelada(evaluacion_id)  # noqa: E731
         evaluacion.estado = EstadoEvaluacion.EN_PROGRESO
         _avance(db, evaluacion, 5, "Validando el objetivo")
 
@@ -72,6 +83,7 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
                 perfil=nmap["puertos"],
                 timeout=nmap["timeout_s"],
                 versiones=nmap["detectar_versiones"],
+                cancelar=cancelada,
             )
 
             zap = cfg["motores"]["zap"]
@@ -89,17 +101,29 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
                     if url_zap is None:
                         evaluacion.detalle_error = "No se ejecutó OWASP ZAP: no se detectó una aplicación web en el objetivo."
                     else:
-                        for h in zap_client.ZapClient().analizar(url_zap, zap["timeout_s"], zap["escaneo_activo"]):
+                        cliente_zap = zap_client.ZapClient()
+                        cliente_zap.cancelar = cancelada
+                        for h in cliente_zap.analizar(url_zap, zap["timeout_s"], zap["escaneo_activo"]):
                             db.add(Hallazgo(evaluacion_id=evaluacion.id, **h))
+                except EvaluacionCancelada:
+                    raise
                 except zap_client.ZapError as exc:
                     evaluacion.detalle_error = f"OWASP ZAP no pudo completar el análisis: {exc}. Se conservan los resultados de Nmap."
                 except Exception as exc:  # noqa: BLE001
                     evaluacion.detalle_error = f"OWASP ZAP falló de forma inesperada ({type(exc).__name__}). Se conservan los resultados de Nmap."
                 _avance(db, evaluacion, 95, "Guardando resultados")
 
+            if esta_cancelada(evaluacion_id):
+                raise EvaluacionCancelada()
             evaluacion.estado = EstadoEvaluacion.COMPLETADA
             evaluacion.progreso = 100
             evaluacion.etapa = "Completada"
+        except EvaluacionCancelada:
+            # La API ya dejó la evaluación como cancelada: aquí solo se descarta lo parcial.
+            db.rollback()
+            db.query(Hallazgo).filter(Hallazgo.evaluacion_id == evaluacion_id).delete()
+            db.commit()
+            return
         except scanner.ScanError as exc:
             evaluacion.estado = EstadoEvaluacion.FALLIDA
             evaluacion.detalle_error = str(exc)

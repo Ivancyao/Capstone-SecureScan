@@ -22,6 +22,8 @@ from typing import Callable, Dict, List, Optional
 import httpx
 
 from app import risk
+from app.cancelacion import EvaluacionCancelada
+from app.zap_es import traducir
 
 
 class ZapError(Exception):
@@ -49,6 +51,7 @@ class ZapClient:
         self._http = httpx.Client(base_url=self.base_url, timeout=30, transport=transport)
         self._dormir = dormir
         self._intervalo = intervalo
+        self.cancelar: Optional[Callable[[], bool]] = None  # si devuelve True, se detiene el análisis
 
     # ---------- bajo nivel ----------
     def _get(self, ruta: str, **params) -> Dict:
@@ -77,9 +80,20 @@ class ZapClient:
     def _esperar(self, estado: Callable[[], bool], limite: float, que: str) -> None:
         inicio = time.monotonic()
         while not estado():
+            if self.cancelar is not None and self.cancelar():
+                self._detener()
+                raise EvaluacionCancelada()
             if time.monotonic() - inicio > limite:
                 raise ZapError(f"OWASP ZAP superó el tiempo máximo mientras {que}")
             self._dormir(self._intervalo)
+
+    def _detener(self) -> None:
+        """Pide a ZAP que pare lo que esté haciendo (mejor esfuerzo: un fallo aquí no importa)."""
+        for componente in ("spider", "ascan"):
+            try:
+                self._get(f"/JSON/{componente}/action/stopAllScans/")
+            except ZapError:
+                pass
 
     # ---------- escaneo ----------
     def _lanzar_y_esperar(self, componente: str, url: str, limite: float, que: str, **extra) -> None:
@@ -122,6 +136,19 @@ class ZapClient:
 
 # ---------- traducción de alertas a hallazgos ----------
 _RIESGO = {"3": "alta", "2": "media", "1": "baja", "0": "informativa"}
+# El API real de ZAP (core/view/alerts) entrega el nivel como texto en "risk" ("High", "Medium", ...);
+# algunos formatos de reporte traen además el código numérico en "riskcode". Se aceptan ambos.
+_RIESGO_TEXTO = {"high": "alta", "medium": "media", "low": "baja", "informational": "informativa", "info": "informativa"}
+
+
+def severidad_zap(alerta: Dict) -> str:
+    """Nivel de riesgo de una alerta de ZAP (alta, media, baja o informativa). Nunca devuelve crítica."""
+    codigo = alerta.get("riskcode")
+    if codigo is not None and str(codigo) in _RIESGO:
+        return _RIESGO[str(codigo)]
+    texto = str(alerta.get("risk") or "").strip().lower()
+    # ZAP a veces anota la confianza: "Medium (High)"; se usa solo el primer término
+    return _RIESGO_TEXTO.get(texto.split(" ")[0], "informativa")
 _CVSS_ESTIMADO = {"alta": 7.5, "media": 5.3, "baja": 3.1, "informativa": 0.0}
 OWASP_2021 = {
     "A01": "A01:2021 - Broken Access Control",
@@ -168,7 +195,7 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
     hallazgos = []
     for items in grupos.values():
         a = items[0]
-        severidad = _RIESGO.get(str(a.get("riskcode")), "informativa")
+        severidad = severidad_zap(a)
         cvss = _CVSS_ESTIMADO[severidad]
         ejemplos = []
         for x in items[:3]:
@@ -179,17 +206,26 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
         evidencia = f"{len(items)} instancia(s). Ejemplos: " + "; ".join(ejemplos)
         if a.get("evidence"):
             evidencia += f". Evidencia: {_limpio(a['evidence'], 160)}"
-        desc = _limpio(a.get("description"), 280)
-        if desc:
-            evidencia += f". {desc}"
+        original = (a.get("alert") or a.get("name") or "Alerta de ZAP")
+        es = traducir(a)
+        if es:
+            nombre, desc, recomendacion = es
+            evidencia += f". {desc} (Alerta original de ZAP: {original}.)"
+        else:
+            # Alerta fuera del catálogo: se conserva el texto original de ZAP (en inglés) y se avisa
+            nombre = original
+            desc = _limpio(a.get("description"), 280)
+            if desc:
+                evidencia += f". Descripción original de ZAP (en inglés): {desc}"
+            recomendacion = _limpio(a.get("solution"), 600) or "Revisar la alerta en OWASP ZAP y corregir según su guía."
         hallazgos.append(
             {
-                "nombre_vulnerabilidad": (a.get("alert") or a.get("name") or "Alerta de ZAP")[:200],
+                "nombre_vulnerabilidad": nombre[:200],
                 "categoria_owasp": categoria_owasp(a),
                 "cvss_score": cvss,
                 "severidad": risk.severidad_desde_cvss(cvss),
                 "evidencia": evidencia[:1500],
-                "recomendacion": _limpio(a.get("solution"), 600) or "Revisar la alerta en OWASP ZAP y corregir según su guía.",
+                "recomendacion": recomendacion,
                 "herramienta_origen": "owasp_zap",
             }
         )

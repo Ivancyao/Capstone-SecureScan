@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Icon } from "../components/Icon.jsx";
 import { EmptyState, EstadoBadge, PageHeader, Panel, Tabs, Tag, useTitulo } from "../components/ui.jsx";
 import { SeverityBar, Sparkline } from "../components/charts.jsx";
-import { ActivoModal, EvaluarBoton, NoEncontrado, ProyectoModal, ResumenSeveridad } from "../components/shared.jsx";
+import { ActivoModal, EvaluarBoton, NoEncontrado, ProyectoModal, ResumenSeveridad, TarjetaProyecto } from "../components/shared.jsx";
 import { SevBadge } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useData } from "../context/DataContext.jsx";
@@ -37,28 +37,10 @@ export function Proyectos() {
           <EmptyState icono="folder" titulo="Aún no tienes proyectos" texto="Crea uno para empezar a registrar activos y evaluarlos." accion={<button className="btn btn-primary" onClick={() => setModal(true)}>Crear proyecto</button>} />
         </div>
       ) : (
-        <div className="panel">
-          <ul className="rows rows-grandes">
-            {data.proyectos.map((p) => (
-              <li key={p.id} className="clic" onClick={() => nav(`/proyectos/${p.id}`)}>
-                <span className="icono-caja"><Icon name="folder" size={20} /></span>
-                <div className="grow">
-                  <Link to={`/proyectos/${p.id}`} className="titulo" onClick={(e) => e.stopPropagation()}>{p.nombre}</Link>
-                  <span className="sub">{p.descripcion || "Sin descripción"}</span>
-                  <span className="sub">
-                    {plural(p.activos.length, "activo", "activos")}
-                    {p.ultima ? ` · última evaluación ${hace(p.ultima.iniciada_en)}` : " · sin evaluaciones"}
-                    {user.rol === "admin" && duenos[p.propietario_id] ? ` · de ${duenos[p.propietario_id]}` : ""}
-                  </span>
-                </div>
-                <div className="row-bar row-bar-ancha">
-                  {p.conteo.total > 0 ? <SeverityBar conteo={p.conteo} alto={10} /> : <span className="xs muted">{p.activos.some((a) => a.ultimaOk) ? "Sin hallazgos abiertos" : "Sin datos"}</span>}
-                </div>
-                <div className="col-sev"><SevBadge sev={p.maxSev} /></div>
-                <Icon name="chevron-right" size={18} />
-              </li>
-            ))}
-          </ul>
+        <div className="cards">
+          {data.proyectos.map((p) => (
+            <TarjetaProyecto key={p.id} proyecto={p} dueno={user.rol === "admin" ? duenos[p.propietario_id] : null} />
+          ))}
         </div>
       )}
       <ProyectoModal abierto={modal} onClose={() => setModal(false)} />

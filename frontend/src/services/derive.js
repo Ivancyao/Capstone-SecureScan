@@ -42,6 +42,8 @@ export function derive(snap) {
       const activo = activosPorId[e.activo_id];
       return {
         ...e,
+        // El servidor guarda una cancelación como "fallida" con la etapa "Cancelada"; aquí se distingue
+        estado: e.etapa === "Cancelada" ? "cancelada" : e.estado,
         activo,
         proyecto: activo ? proyectosPorId[activo.proyecto_id] : null,
         conteo: contar(e.hallazgos),

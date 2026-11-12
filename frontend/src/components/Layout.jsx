@@ -60,6 +60,7 @@ export function Layout() {
           <Item to="/proyectos" icono="folder" texto="Proyectos" />
           <Item to="/activos" icono="server" texto="Activos" />
           <Item to="/evaluaciones" icono="radar" texto="Evaluaciones" badge={enCurso || null} tono="vivo" />
+          <Item to="/analisis" icono="shield" texto="Análisis rápido" />
           <Item to="/hallazgos" icono="alert" texto="Hallazgos" badge={criticos || null} tono="crit" />
           <p className="nav-group">Salida</p>
           <Item to="/reportes" icono="file" texto="Reportes" />

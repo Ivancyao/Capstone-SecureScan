@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon.jsx";
-import { Aviso, EmptyState, EstadoBadge, PageHeader, Panel, Progress, SevBadge, useTitulo } from "../components/ui.jsx";
-import { ChartFrame, HBars, LeyendaSev, SeverityBar, Sparkline, WeeklyColumns } from "../components/charts.jsx";
+import { Aviso, EmptyState, EstadoBadge, PageHeader, Panel, Progress, TarjetaKpi, useTitulo } from "../components/ui.jsx";
+import { ChartFrame, HBars, LeyendaSev, WeeklyColumns } from "../components/charts.jsx";
 import { PortMap } from "../components/PortMap.jsx";
-import { ProyectoModal, ResumenSeveridad } from "../components/shared.jsx";
+import { ProyectoModal, ResumenSeveridad, TarjetaActivo } from "../components/shared.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { fmtFechaHora, hace, plural } from "../lib/format.js";
@@ -69,8 +69,16 @@ export default function Panel_() {
         </div>
       )}
 
+      <div className="kpis panel-gap">
+        <TarjetaKpi to="/hallazgos?sev=critica" icono="alert" etiqueta="Hallazgos críticos" valor={conteoGlobal.critica} pie={conteoGlobal.critica ? "Corregir de inmediato" : "Nada urgente"} tono="var(--sev-critica)" />
+        <TarjetaKpi to="/hallazgos?sev=alta" icono="shield" etiqueta="Hallazgos altos" valor={conteoGlobal.alta} pie={conteoGlobal.alta ? "Corregir en el corto plazo" : "Sin pendientes altos"} tono="var(--sev-alta)" />
+        <TarjetaKpi to="/activos" icono="server" etiqueta="Activos evaluados" valor={evaluados} pie={`de ${plural(data.activos.length, "activo registrado", "activos registrados")}`} />
+        <TarjetaKpi to="/evaluaciones" icono="radar" etiqueta="Evaluaciones" valor={evaluaciones.length} pie={enCurso.length ? `${enCurso.length} en curso ahora` : "Ninguna en curso"} tono="var(--st-completada)" />
+      </div>
+
       <div className="grid-main panel-gap">
         <Panel
+          className="panel-hero"
           titulo={masExpuesto ? masExpuesto.nombre : "Mapa de puertos"}
           descripcion={masExpuesto ? `Activo más expuesto · ${plural(masExpuesto.abiertos.length, "hallazgo abierto", "hallazgos abiertos")} · evaluado ${hace(masExpuesto.ultimaOk?.iniciada_en)}` : "Cuando evalúes un activo, sus puertos aparecerán aquí."}
           acciones={masExpuesto && <Link className="btn btn-sm" to={`/evaluaciones/${masExpuesto.ultimaOk.id}`}>Ver evaluación</Link>}
@@ -120,27 +128,21 @@ export default function Panel_() {
       </div>
 
       <div className="grid-main panel-gap">
-        <Panel titulo="Activos que requieren atención" descripcion="Ordenados por la severidad más alta que tienen abierta" flush>
+        <div className="atencion">
+          <div className="atencion-head">
+            <h2 className="h-section">Activos que requieren atención</h2>
+            <p className="small muted">Ordenados por la severidad más alta que tienen abierta</p>
+          </div>
           {activosAtencion.length === 0 ? (
             <p className="small muted tabla-vacia">Todos los activos están al día.</p>
           ) : (
-            <ul className="rows">
-              {activosAtencion.slice(0, 6).map((a) => (
-                <li key={a.id} className="clic" onClick={() => nav(`/activos/${a.id}`)}>
-                  <div className="grow">
-                    <Link to={`/activos/${a.id}`} className="titulo" onClick={(e) => e.stopPropagation()}>{a.nombre}</Link>
-                    <span className="sub">{a.proyecto?.nombre} · evaluado {hace(a.ultimaOk?.iniciada_en)}</span>
-                  </div>
-                  <div className="row-bar"><SeverityBar conteo={a.conteo} alto={10} /></div>
-                  <Sparkline valores={a.serie} />
-                  <SevBadge sev={a.maxSev} />
-                </li>
-              ))}
-            </ul>
+            <div className="cards cards-2">
+              {activosAtencion.slice(0, 4).map((a) => <TarjetaActivo key={a.id} activo={a} />)}
+            </div>
           )}
-        </Panel>
+        </div>
 
-        <Panel titulo="Actividad reciente" flush acciones={<Link className="btn btn-quiet btn-sm" to="/evaluaciones">Ver todas</Link>}>
+        <Panel className="panel-flat" titulo="Actividad reciente" flush acciones={<Link className="btn btn-quiet btn-sm" to="/evaluaciones">Ver todas</Link>}>
           <ul className="rows">
             {evaluaciones.slice(0, 6).map((e) => (
               <li key={e.id} className="clic" onClick={() => nav(`/evaluaciones/${e.id}`)}>

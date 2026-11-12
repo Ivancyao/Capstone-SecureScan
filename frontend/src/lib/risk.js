@@ -30,6 +30,7 @@ export const ESTADOS = {
   en_progreso: "En progreso",
   completada: "Completada",
   fallida: "Fallida",
+  cancelada: "Cancelada",
 };
 
 export const ROLES = {

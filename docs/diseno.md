@@ -27,7 +27,7 @@ Este documento describe cómo está construida la plataforma: requisitos, modelo
 | RNF3 | Contraseñas protegidas | Hash bcrypt; nunca en texto plano; mínimo 8 caracteres. |
 | RNF4 | Entrada validada | Esquemas Pydantic en cada endpoint; listas cerradas para opciones del escáner. |
 | RNF5 | Rendimiento | Panel calculado con SQL (`GROUP BY`); listados con carga anticipada y ventana por activo (ver `rendimiento_resultados.md`). |
-| RNF6 | Mantenibilidad | 93 pruebas automáticas; migración automática de columnas; configuración por variables de entorno. |
+| RNF6 | Mantenibilidad | 129 pruebas automáticas aprobadas (más 1 omitida); migración automática de columnas; configuración por variables de entorno. |
 | RNF7 | Despliegue reproducible | Docker Compose con base de datos, API, interfaz, ZAP y un objetivo de laboratorio. |
 
 ## 2. Arquitectura
@@ -269,9 +269,10 @@ sequenceDiagram
 ## 8. Limitaciones conocidas
 
 - **ZAP se probó con un simulacro**, no con ZAP real. La lógica (flujo, agrupación, severidades, errores) está cubierta por pruebas; falta validarlo evaluando Juice Shop con el servicio `zap` del Compose.
-- **Rendimiento medido sobre SQLite**, no PostgreSQL, y con un solo usuario (ver `rendimiento_resultados.md`).
-- **La interfaz solo muestra las 10 evaluaciones más recientes de cada activo** (el panel y los totales sí cubren todo el historial). Un reporte que incluya una evaluación más antigua la tendrá en el PDF, pero no en su vista previa web.
-- **Las evaluaciones no se pueden cancelar** una vez iniciadas.
-- **`GET /evaluaciones` no está paginado** (se limita por activo con `?ultimas=N`).
+- **Rendimiento:** medido sobre SQLite (26-10-2026) y repetido sobre PostgreSQL 16 (08-11-2026) con resultados equivalentes, con un solo usuario y sin red (ver `rendimiento_resultados.md` y `rendimiento_postgresql.md`).
+- **El panel y el detalle de cada activo usan las 10 evaluaciones más recientes** (los totales sí cubren todo el historial). Un reporte que incluya una evaluación más antigua la tendrá en el PDF, pero no en su vista previa web.
+- **La cancelación es cooperativa:** Nmap se revisa cada segundo y ZAP en cada consulta de avance. Se probó con un Nmap falso y con un ZAP simulado, no con un ZAP real.
+- **La tabla de Evaluaciones pagina en el navegador** (15 por página) sobre las 10 evaluaciones más recientes de cada activo; el historial completo se consulta por la API con `?pagina=P&por_pagina=N`.
+- **El análisis rápido depende de VirusTotal** para la reputación (cuenta gratuita: 4 consultas por minuto y 500 al día) y solo se probó con respuestas simuladas, no con el servicio real. Sin clave, solo entrega indicadores locales.
 - **No hay cierre de sesión en el servidor** (el token expira a los 60 minutos).
 - **No hay recuperación ni restablecimiento de contraseña**: quien la olvida necesita que un administrador le cree una cuenta nueva.

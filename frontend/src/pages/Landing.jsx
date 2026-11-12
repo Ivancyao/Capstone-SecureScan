@@ -69,8 +69,11 @@ export default function Landing() {
 
         <figure className="l-hero-card scope-dark" aria-label="Ejemplo de un escaneo de puertos">
           <figcaption>
-            <strong>Servidor de laboratorio</strong>
-            <span className="small muted">Ejemplo de escaneo, 20 puertos revisados</span>
+            <span className="l-card-top">
+              <strong>Servidor de laboratorio</strong>
+              <span className="l-live"><i aria-hidden="true" /> Ejemplo</span>
+            </span>
+            <span className="small muted">192.168.1.20 · 20 puertos revisados</span>
           </figcaption>
           <PortMapDemo hallazgos={EJEMPLO} />
           <ul className="leyenda">
@@ -87,7 +90,7 @@ export default function Landing() {
         <ol className="l-pasos">
           {PASOS.map((p, i) => (
             <li key={p.t}>
-              <span className="l-paso-n" aria-hidden="true">{i + 1}</span>
+              <span className="l-paso-n" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
               <h3 className="h-sub">{p.t}</h3>
               <p className="small soft">{p.d}</p>
             </li>

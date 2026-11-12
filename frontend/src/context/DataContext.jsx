@@ -71,6 +71,8 @@ export function DataProvider({ children }) {
       crearProyecto: accion((d) => api.crearProyecto(d), "Proyecto creado"),
       crearActivo: accion((pid, d) => api.crearActivo(pid, d), "Activo registrado"),
       iniciarEvaluacion: accion((aid) => api.iniciarEvaluacion(aid), "Evaluación iniciada"),
+      cancelarEvaluacion: accion((id) => api.cancelarEvaluacion(id), "Evaluación cancelada"),
+      eliminarEvaluacion: accion((id) => api.eliminarEvaluacion(id), "Evaluación eliminada"),
       marcarCorregido: accion((id, v) => api.marcarCorregido(id, v), null),
       crearReporte: accion((d) => api.crearReporte(d), "Reporte generado"),
       eliminarReporte: accion((id) => api.eliminarReporte(id), "Reporte eliminado"),

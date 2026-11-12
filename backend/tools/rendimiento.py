@@ -102,7 +102,8 @@ def main():
         lineas.append(f"| POST /auth/login (bcrypt, 1 vez) | {login_ms:.0f} | — | — | — |")
         pruebas = [
             ("GET", "/proyectos", {}), ("GET", "/activos", {}), ("GET", "/metricas", {}),
-            ("GET", f"/evaluaciones/{una_eval}", {}), ("GET", "/evaluaciones?ultimas=10", {}), ("GET", "/evaluaciones", {}),
+            ("GET", f"/evaluaciones/{una_eval}", {}), ("GET", "/evaluaciones?ultimas=10", {}), ("GET", "/evaluaciones?pagina=1&por_pagina=50", {}),
+            ("GET", "/evaluaciones?pagina=60&por_pagina=50", {}), ("GET", "/evaluaciones", {}),
         ]
         for metodo, ruta, kw in pruebas:
             med, p95, mx, tam = medir(cab, metodo, ruta, **kw)

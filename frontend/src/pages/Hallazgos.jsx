@@ -14,7 +14,7 @@ export function Hallazgos() {
   const { data } = useData();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get("q") || "");
-  const [sevs, setSevs] = useState([]);
+  const [sevs, setSevs] = useState(() => (params.get("sev") || "").split(",").filter((s) => SEVERIDADES.includes(s)));
   const [herr, setHerr] = useState("");
   const [owasp, setOwasp] = useState("");
   const [estado, setEstado] = useState("abiertos");

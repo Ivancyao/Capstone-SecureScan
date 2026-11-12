@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "./Icon.jsx";
 import { Campo, EmptyState, Modal, SevBadge } from "./ui.jsx";
-import { SeverityBar } from "./charts.jsx";
+import { SeverityBar, Sparkline } from "./charts.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 import { HERRAMIENTAS, SEV, SEVERIDADES, ordenSev, owaspCodigo } from "../lib/risk.js";
-import { fmtCvss, fmtFecha } from "../lib/format.js";
+import { fmtCvss, fmtFecha, hace, plural } from "../lib/format.js";
 
 // ---------- Recurso inexistente (o ajeno): se responde igual que el backend, con "no encontrado" ----------
 export function NoEncontrado({ que = "El recurso", volver = "/panel", etiqueta = "Volver al panel" }) {
@@ -250,5 +250,67 @@ export function ActivoModal({ abierto, onClose, proyectoId }) {
         </Campo>
       </form>
     </Modal>
+  );
+}
+
+// ---------- Tarjetas (toda la tarjeta lleva al detalle; el botón de evaluar queda por encima) ----------
+export function TarjetaActivo({ activo: a, mostrarProyecto = true }) {
+  const nav = useNavigate();
+  return (
+    <article className="card-i" style={{ "--tone": a.ultimaOk ? `var(--sev-${a.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => nav(`/activos/${a.id}`)}>
+      <header className="card-i-head">
+        <div className="grow">
+          <Link to={`/activos/${a.id}`} className="titulo card-i-titulo" onClick={(e) => e.stopPropagation()}>{a.nombre}</Link>
+          <span className="sub mono">{a.url_objetivo}</span>
+        </div>
+        {a.ultimaOk ? <SevBadge sev={a.maxSev} /> : <span className="tag">Sin evaluar</span>}
+      </header>
+      {a.ultimaOk ? (
+        <div className="card-i-datos">
+          <SeverityBar conteo={a.conteo} alto={8} />
+          <div className="card-i-fila">
+            <span className="small soft"><strong className="num">{a.conteo.total}</strong> {a.conteo.total === 1 ? "hallazgo abierto" : "hallazgos abiertos"}</span>
+            <Sparkline valores={a.serie} ancho={72} alto={22} />
+          </div>
+        </div>
+      ) : (
+        <p className="small muted">Lanza la primera evaluación para ver su exposición.</p>
+      )}
+      <footer className="card-i-pie">
+        <span className="xs muted">
+          {mostrarProyecto && a.proyecto?.nombre ? `${a.proyecto.nombre} · ` : ""}
+          {a.ultima ? `evaluado ${hace(a.ultima.iniciada_en)}` : "sin evaluaciones"}
+        </span>
+        <span className="card-i-accion" onClick={(e) => e.stopPropagation()}>
+          <EvaluarBoton activo={a} pequeno texto="Evaluar" />
+        </span>
+      </footer>
+    </article>
+  );
+}
+
+export function TarjetaProyecto({ proyecto: p, dueno }) {
+  const nav = useNavigate();
+  return (
+    <article className="card-i" style={{ "--tone": p.conteo.total > 0 ? `var(--sev-${p.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => nav(`/proyectos/${p.id}`)}>
+      <header className="card-i-head">
+        <span className="icono-caja"><Icon name="folder" size={20} /></span>
+        <div className="grow">
+          <Link to={`/proyectos/${p.id}`} className="titulo card-i-titulo" onClick={(e) => e.stopPropagation()}>{p.nombre}</Link>
+          <span className="sub">{p.descripcion || "Sin descripción"}</span>
+        </div>
+      </header>
+      <div className="card-i-datos">
+        {p.conteo.total > 0 ? <SeverityBar conteo={p.conteo} alto={8} /> : <span className="xs muted">{p.activos.some((x) => x.ultimaOk) ? "Sin hallazgos abiertos" : "Sin datos de evaluación"}</span>}
+        <div className="card-i-fila">
+          <span className="small soft">{plural(p.activos.length, "activo", "activos")}</span>
+          {p.conteo.total > 0 && <SevBadge sev={p.maxSev} />}
+        </div>
+      </div>
+      <footer className="card-i-pie">
+        <span className="xs muted">{p.ultima ? `última evaluación ${hace(p.ultima.iniciada_en)}` : "sin evaluaciones"}{dueno ? ` · de ${dueno}` : ""}</span>
+        <Icon name="chevron-right" size={16} className="card-i-go" />
+      </footer>
+    </article>
   );
 }

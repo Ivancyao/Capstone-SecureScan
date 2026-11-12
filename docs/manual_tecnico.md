@@ -58,6 +58,8 @@ Instala Nmap con el gestor de tu sistema (`apt install nmap`, `brew install nmap
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Duración de la sesión |
 | `CORS_ORIGINS` | `http://localhost:5173` | Orígenes del frontend permitidos, separados por coma |
 | `ALLOW_PUBLIC_SCANS` | `false` | Candado del servidor para escanear IP públicas. Con `false`, ninguna configuración web puede habilitarlas. |
+| `VIRUSTOTAL_API_KEY` | (vacía) | Clave de la API de VirusTotal para el *Análisis rápido*. Sin ella solo se muestran indicadores locales. Nunca se envía al navegador. |
+| `ANALISIS_MAX_MB` | `20` | Tamaño máximo de un archivo a analizar (VirusTotal acepta hasta 32 MB). |
 | `NMAP_PORTS` | puertos 1-1024 y comunes | Lista de puertos del perfil "predeterminado" |
 | `NMAP_TIMEOUT` | `300` | Segundos máximos por escaneo (valor inicial; luego se cambia en Configuración) |
 | `REPORTS_DIR` | `./reportes_generados` | Dónde se guardan los PDF. En Docker es un volumen. |
@@ -101,7 +103,9 @@ Documentación completa y probable en `/docs`. Resumen:
 |---|---|---|
 | Sesión | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me`, `POST /auth/password` | Públicos los dos primeros |
 | Proyectos y activos | `GET/POST /proyectos`, `GET/POST /proyectos/{id}/activos`, `GET /activos` | Dueño o admin |
-| Evaluaciones | `POST/GET /activos/{id}/evaluaciones`, `GET /evaluaciones[?ultimas=N]`, `GET /evaluaciones/{id}` | Dueño o admin |
+| Evaluaciones | `POST/GET /activos/{id}/evaluaciones`, `GET /evaluaciones[?ultimas=N]` o `?pagina=P&por_pagina=N` (total en la cabecera `X-Total-Count`), `GET /evaluaciones/{id}` | Dueño o admin |
+| Cancelar y eliminar | `POST /evaluaciones/{id}/cancelar`, `DELETE /evaluaciones/{id}` | Dueño o admin |
+| Análisis rápido | `GET /analisis/estado`, `POST /analisis/url`, `POST /analisis/archivo` (multipart; `subir=true` autoriza enviar el archivo a VirusTotal), `GET /analisis`, `GET /analisis/{id}`, `DELETE /analisis/{id}` | Cada usuario ve solo los suyos |
 | Hallazgos | `PATCH /hallazgos/{id}` con `{"corregido":"si"\|"no"}` | Dueño o admin |
 | Métricas | `GET /metricas` | Lo que el usuario puede ver |
 | Reportes | `GET /reportes`, `POST /proyectos/{id}/reportes`, `GET /reportes/{id}/descargar`, `DELETE /reportes/{id}` | Dueño o admin |
@@ -109,7 +113,7 @@ Documentación completa y probable en `/docs`. Resumen:
 | Configuración | `GET /configuracion`, `PUT /configuracion` | Leer: todos. Escribir: admin |
 | Sistema | `GET /health` | Público |
 
-Códigos que conviene reconocer: `401` sin sesión o sesión vencida; `403` rol insuficiente o cuenta desactivada; `404` no existe **o no es tuyo**; `409` ya hay una evaluación en curso para ese activo; `422` datos inválidos.
+Códigos que conviene reconocer: `401` sin sesión o sesión vencida; `403` rol insuficiente o cuenta desactivada; `404` no existe **o no es tuyo**; `409` ya hay una evaluación en curso para ese activo, la evaluación ya terminó (al cancelar) o sigue en curso (al eliminar); `413` archivo demasiado grande; `422` datos inválidos.
 
 ## 7. Operación
 
@@ -131,7 +135,7 @@ Al arrancar, el backend agrega las columnas que falten (`app/migrar.py`); no hac
 ## 8. Pruebas
 
 ```bash
-cd backend && pytest                       # 93 pruebas; 1 se omite si no hay Nmap
+cd backend && pytest                       # 130 pruebas (129 aprobadas); 1 se omite si no hay Nmap
 DATABASE_URL=sqlite:///./rendimiento.db python tools/rendimiento.py
 ```
 
@@ -139,11 +143,12 @@ DATABASE_URL=sqlite:///./rendimiento.db python tools/rendimiento.py
 |---|---|
 | `test_api.py` | Registro, login, contraseñas hasheadas, acceso sin token, aislamiento entre usuarios |
 | `test_scanner.py` | Validación del objetivo, bloqueo de IP públicas, anti-inyección, lectura del XML de Nmap, bandas CVSS, evaluación completa. Incluye una prueba con **Nmap real** (se omite si no está instalado). |
-| `test_endpoints_nuevos.py` | Hallazgos, usuarios y roles, perfil, configuración, progreso, concurrencia, retención, reportes PDF, migración |
+| `test_endpoints_nuevos.py` | Hallazgos, usuarios y roles, perfil, configuración, progreso, concurrencia, retención, reportes PDF, migración, paginación, cancelar y eliminar evaluaciones |
 | `test_metricas.py` | Las consultas SQL contra un cálculo independiente en Python, con datos aleatorios |
-| `test_zap.py` | Cliente de ZAP y su integración, **con un simulacro del API de ZAP** (ver límites) |
+| `test_zap.py` | Cliente de ZAP y su integración (incluida la cancelación), **con un simulacro del API de ZAP** (ver límites) |
+| `test_analisis.py` | Análisis rápido: indicadores locales, EICAR, consentimiento para subir archivos, límites, propiedad; **VirusTotal simulado** con `httpx.MockTransport` |
 
-**Límites de las pruebas:** ZAP real no se ejecutó; el rendimiento se midió en SQLite y con un solo usuario; la interfaz se verificó a mano en un navegador real, sin pruebas automáticas de interfaz en el repositorio.
+**Límites de las pruebas:** ZAP real se validó en una corrida contra Juice Shop (06-11-2026), pero la suite usa un simulacro; VirusTotal real no se probó; el rendimiento se midió en SQLite y en PostgreSQL, con un solo usuario; la interfaz se verificó a mano en un navegador real, sin pruebas automáticas de interfaz en el repositorio.
 
 ## 9. Solución de problemas
 

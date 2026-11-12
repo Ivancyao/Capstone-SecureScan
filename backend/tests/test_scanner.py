@@ -141,3 +141,29 @@ def test_evaluacion_contra_objetivo_publico_falla_sin_escanear(monkeypatch):
     assert ev["estado"] == "fallida"
     assert "bloqueado" in ev["detalle_error"].lower()
     assert llamado == []  # Nmap jamás se ejecutó
+
+
+def test_nmap_se_cancela_a_mitad_de_camino(tmp_path, monkeypatch):
+    """Un 'nmap' falso que tarda 60 s: al cancelar se termina el proceso en vez de esperarlo."""
+    import os
+    import time
+    from app.cancelacion import EvaluacionCancelada
+
+    falso = tmp_path / "nmap"
+    falso.write_text("#!/bin/sh\nsleep 60\n")
+    falso.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    t = time.monotonic()
+    with pytest.raises(EvaluacionCancelada):
+        scanner.escanear_puertos("127.0.0.1", timeout=120, cancelar=lambda: time.monotonic() - t > 1.5)
+    assert time.monotonic() - t < 15
+
+
+def test_nmap_cancelable_tambien_respeta_el_tiempo_maximo(tmp_path, monkeypatch):
+    import os
+    falso = tmp_path / "nmap"
+    falso.write_text("#!/bin/sh\nsleep 60\n")
+    falso.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    with pytest.raises(scanner.ScanError, match="tiempo máximo"):
+        scanner.escanear_puertos("127.0.0.1", timeout=2, cancelar=lambda: False)

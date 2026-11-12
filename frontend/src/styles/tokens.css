@@ -1,64 +1,69 @@
-/* Tokens de diseño de SecureScan. Todo color y medida sale de aquí. */
+/* Tokens de diseño de SecureScan. Todo color y medida sale de aquí.
+   Dirección visual: "radar nocturno". Fondo casi negro con un matiz azul, un único acento
+   cobalto para lo interactivo y los colores de severidad como lenguaje principal de los datos. */
 :root,
 :root[data-theme="light"] {
   --font-ui: "Schibsted Grotesk Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-title: "Source Serif 4 Variable", Georgia, "Times New Roman", serif;
-  --font-code: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --font-title: "Bricolage Grotesque Variable", "Schibsted Grotesk Variable", "Segoe UI", system-ui, sans-serif;
+  --font-code: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
   /* Superficies */
-  --bg: #edf0f4;
+  --bg: #f1f2f8;
   --surface: #ffffff;
-  --surface-2: #f5f7fa;
-  --surface-3: #e9eef4;
-  --line: #dce2e9;
-  --line-strong: #bfc9d5;
+  --surface-2: #f6f7fc;
+  --surface-3: #eaecf5;
+  --line: #e0e3ee;
+  --line-strong: #c5cadb;
 
   /* Tinta */
-  --ink: #0f1d2c;
-  --ink-2: #3b4959;
-  --ink-3: #5f6e82;
+  --ink: #0b0f1e;
+  --ink-2: #394058;
+  --ink-3: #5a6280;
 
-  /* Navegación lateral (se mantiene oscura en ambos temas) */
-  --nav: #0b2038;
-  --nav-2: #133150;
-  --nav-line: #1c3a5c;
-  --nav-ink: #dbe5f0;
-  --nav-ink-2: #8da3bb;
+  /* Navegación lateral (oscura también en el tema claro) */
+  --nav: #090c16;
+  --nav-2: #141a2b;
+  --nav-line: #1d2438;
+  --nav-ink: #e1e5f0;
+  --nav-ink-2: #8a93ab;
 
   /* Acento: solo para lo interactivo */
-  --accent: #0a7c9c;
-  --accent-strong: #08657f;
+  --accent: #3b54e0;
+  --accent-strong: #2c42c0;
   --accent-ink: #ffffff;
-  --accent-soft: #e0f2f7;
-  --accent-line: #9ad3e3;
+  --accent-soft: #e8ebfd;
+  --accent-line: #a9b4f1;
+  --accent-glow: rgba(59, 84, 224, 0.28);
 
   /* Severidad: marca (relleno) y fondo suave. El texto siempre usa tinta. */
-  --sev-critica: #a3201a;
+  --sev-critica: #c41e2e;
   --sev-alta: #e5671a;
-  --sev-media: #f0c000;
-  --sev-baja: #3e9b63;
-  --sev-informativa: #aab5c4;
-  --sev-critica-bg: #fce9e7;
+  --sev-media: #eab800;
+  --sev-baja: #2e9e63;
+  --sev-informativa: #9aa4b8;
+  --sev-critica-bg: #fde8ea;
   --sev-alta-bg: #fdecdf;
-  --sev-media-bg: #fcf3d3;
-  --sev-baja-bg: #e3f3ea;
-  --sev-informativa-bg: #eaeef3;
+  --sev-media-bg: #fcf3cf;
+  --sev-baja-bg: #e1f4ea;
+  --sev-informativa-bg: #eceff5;
 
   /* Estado de evaluación */
-  --st-pendiente: #8493a6;
-  --st-en_progreso: #0a7c9c;
-  --st-completada: #3e9b63;
-  --st-fallida: #c0261b;
+  --st-pendiente: #8590a8;
+  --st-en_progreso: #3b54e0;
+  --st-completada: #2e9e63;
+  --st-fallida: #c41e2e;
 
-  --ok: #2f7d52;
-  --ok-bg: #e3f3ea;
-  --warn-bg: #fcf3d3;
+  --ok: #1f7f4f;
+  --ok-bg: #e1f4ea;
+  --warn-bg: #fcf3cf;
   --danger: #b42318;
-  --danger-bg: #fce9e7;
+  --danger-bg: #fde8ea;
 
-  --focus: #0a7c9c;
-  --overlay: rgba(11, 32, 56, 0.5);
-  --shadow-pop: 0 12px 32px rgba(11, 32, 56, 0.18);
+  --focus: #3b54e0;
+  --overlay: rgba(9, 12, 22, 0.55);
+  --shadow-pop: 0 16px 40px rgba(9, 12, 22, 0.22);
+  --grid-dot: rgba(11, 15, 30, 0.09);
+  --panel-edge: linear-gradient(150deg, #aab5f2 0%, #dfe3ee 38%, #dfe3ee 100%);
 
   /* Escala tipográfica */
   --t-xs: 0.75rem;
@@ -66,67 +71,72 @@
   --t-base: 0.9375rem;
   --t-md: 1.0625rem;
   --t-lg: 1.25rem;
-  --t-xl: 1.75rem;
-  --t-2xl: 2.125rem;
-  --t-hero: clamp(2.4rem, 4.4vw, 3.6rem);
+  --t-xl: 1.875rem;
+  --t-2xl: 2.5rem;
+  --t-hero: clamp(2.7rem, 5.4vw, 4.6rem);
 
-  /* Forma */
-  --r-panel: 10px;
-  --r-control: 7px;
-  --r-tile: 6px;
+  /* Forma: cada nivel tiene su radio (paneles > controles > fichas) */
+  --r-panel: 14px;
+  --r-control: 8px;
+  --r-tile: 5px;
 
-  --nav-w: 256px;
+  --nav-w: 248px;
   --gap: 20px;
 }
 
 :root[data-theme="dark"],
 .scope-dark {
-  --bg: #0a1522;
-  --surface: #0f2033;
-  --surface-2: #132a43;
-  --surface-3: #1a3453;
-  --line: #213a57;
-  --line-strong: #31506f;
+  --bg: #06080e;
+  --surface: #0d111b;
+  --surface-2: #121726;
+  --surface-3: #192034;
+  --line: #1c2336;
+  --line-strong: #2b3552;
 
-  --ink: #e7eef6;
-  --ink-2: #b2c0d0;
-  --ink-3: #8497ac;
+  --ink: #e9ecf5;
+  --ink-2: #b5bbcd;
+  --ink-3: #8991a9;
 
-  --nav: #071524;
-  --nav-2: #10283f;
-  --nav-line: #163350;
+  --nav: #080a12;
+  --nav-2: #131828;
+  --nav-line: #1a2134;
+  --nav-ink: #dfe3ef;
+  --nav-ink-2: #858ea6;
 
-  --accent: #3cc3e3;
-  --accent-strong: #6fd5ec;
-  --accent-ink: #052633;
-  --accent-soft: #0f3547;
-  --accent-line: #1f6479;
+  --accent: #7b92ff;
+  --accent-strong: #a4b4ff;
+  --accent-ink: #060a1c;
+  --accent-soft: #151c3f;
+  --accent-line: #34428f;
+  --accent-glow: rgba(123, 146, 255, 0.32);
 
-  --sev-critica: #e04348;
-  --sev-alta: #f9902f;
-  --sev-media: #fde062;
-  --sev-baja: #4fc47f;
-  --sev-informativa: #8a9bb0;
-  --sev-critica-bg: #3a1a1d;
-  --sev-alta-bg: #3a2616;
-  --sev-media-bg: #3a3012;
-  --sev-baja-bg: #15301f;
-  --sev-informativa-bg: #1b2d42;
+  --sev-critica: #ff4d5e;
+  --sev-alta: #ff8a3d;
+  --sev-media: #ffd23f;
+  --sev-baja: #3ddc97;
+  --sev-informativa: #7e889f;
+  --sev-critica-bg: #2b1119;
+  --sev-alta-bg: #2b1b10;
+  --sev-media-bg: #2a2410;
+  --sev-baja-bg: #0e2a1e;
+  --sev-informativa-bg: #1a2133;
 
-  --st-pendiente: #8a9bb0;
-  --st-en_progreso: #3cc3e3;
-  --st-completada: #5cc084;
-  --st-fallida: #f0584b;
+  --st-pendiente: #8991a9;
+  --st-en_progreso: #7b92ff;
+  --st-completada: #3ddc97;
+  --st-fallida: #ff5c6b;
 
-  --ok: #5cc084;
-  --ok-bg: #15301f;
-  --warn-bg: #3a3012;
-  --danger: #f0786d;
-  --danger-bg: #3a1a1d;
+  --ok: #3ddc97;
+  --ok-bg: #0e2a1e;
+  --warn-bg: #2a2410;
+  --danger: #ff7480;
+  --danger-bg: #2b1119;
 
-  --focus: #6fd5ec;
-  --overlay: rgba(2, 8, 16, 0.65);
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --focus: #a4b4ff;
+  --overlay: rgba(2, 4, 10, 0.7);
+  --shadow-pop: 0 16px 44px rgba(0, 0, 0, 0.6);
+  --grid-dot: rgba(164, 180, 255, 0.11);
+  --panel-edge: linear-gradient(150deg, #3c4a9c 0%, #1f2740 36%, #1c2336 100%);
 }
 
 .scope-dark { color: var(--ink); }

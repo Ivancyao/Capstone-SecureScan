@@ -13,7 +13,7 @@ from app import models  # noqa: F401  (registra los modelos en Base.metadata)
 from app.database import Base, SessionLocal, engine
 from app.migrar import agregar_columnas_faltantes
 from app.models import EstadoEvaluacion, Evaluacion
-from app.routers import auth, configuracion, metricas, proyectos, reportes, usuarios
+from app.routers import analisis, auth, configuracion, metricas, proyectos, reportes, usuarios
 
 # Crea las tablas si no existen (suficiente para el MVP; luego se puede migrar a Alembic).
 Base.metadata.create_all(bind=engine)
@@ -50,6 +50,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],  # total de la paginación (GET /evaluaciones?pagina=...)
 )
 
 app.include_router(auth.router)
@@ -58,6 +59,7 @@ app.include_router(reportes.router)
 app.include_router(usuarios.router)
 app.include_router(configuracion.router)
 app.include_router(metricas.router)
+app.include_router(analisis.router)
 
 
 @app.get("/health", tags=["Sistema"])

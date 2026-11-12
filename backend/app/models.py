@@ -149,3 +149,24 @@ class Configuracion(Base):
     clave = Column(String(60), primary_key=True)
     valor = Column(JSON, nullable=False)
     actualizado_en = Column(DateTime, default=datetime.utcnow)
+
+
+class Analisis(Base):
+    """
+    Análisis rápido de una URL o de un archivo: reputación en VirusTotal + señales locales.
+    No guarda el contenido del archivo, solo su huella SHA-256 y el resultado.
+    """
+    __tablename__ = "analisis"
+
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=gen_uuid)
+    usuario_id = Column(Uuid(as_uuid=False), ForeignKey("usuarios.id"), nullable=False)
+    tipo = Column(String(10), nullable=False)               # "url" | "archivo"
+    objetivo = Column(String(2048), nullable=False)          # la URL o el nombre del archivo
+    sha256 = Column(String(64), nullable=True)               # huella del archivo
+    tamano_bytes = Column(Integer, nullable=True)
+    estado = Column(String(12), default="pendiente")         # pendiente | completado | error
+    veredicto = Column(String(12), nullable=True)            # limpio | sospechoso | malicioso | sin_datos
+    resumen = Column(Text, nullable=True)                    # frase para mostrar al usuario
+    detalle = Column(JSON, nullable=True)                    # virustotal, señales, cabeceras
+    creado_en = Column(DateTime, default=datetime.utcnow)
+    finalizado_en = Column(DateTime, nullable=True)

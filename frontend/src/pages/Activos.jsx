@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../components/Icon.jsx";
-import { EmptyState, EstadoBadge, PageHeader, Panel, SevBadge, useTitulo } from "../components/ui.jsx";
+import { EmptyState, EstadoBadge, PageHeader, Panel, Segmented, SevBadge, useTitulo } from "../components/ui.jsx";
 import { LeyendaSev, SeverityBar, Sparkline } from "../components/charts.jsx";
 import { PortMap } from "../components/PortMap.jsx";
-import { ActivoModal, CopiarBoton, EvaluarBoton, NoEncontrado, ResumenSeveridad, TablaHallazgos } from "../components/shared.jsx";
+import { ActivoModal, CopiarBoton, EvaluarBoton, NoEncontrado, ResumenSeveridad, TablaHallazgos, TarjetaActivo } from "../components/shared.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { fmtDuracion, fmtFecha, fmtFechaHora, hace } from "../lib/format.js";
 
@@ -15,6 +15,13 @@ export function Activos() {
   const [proyecto, setProyecto] = useState("");
   const [q, setQ] = useState("");
   const [modal, setModal] = useState(false);
+  const [vista, setVista] = useState(() => {
+    try { return localStorage.getItem("securescan-vista-activos") || "tarjetas"; } catch { return "tarjetas"; }
+  });
+  const cambiarVista = (v) => {
+    setVista(v);
+    try { localStorage.setItem("securescan-vista-activos", v); } catch { /* ignorar */ }
+  };
 
   const lista = data.activos.filter((a) => (!proyecto || a.proyecto_id === proyecto) && (!q || `${a.nombre} ${a.url_objetivo}`.toLowerCase().includes(q.toLowerCase())));
 
@@ -38,7 +45,14 @@ export function Activos() {
               {data.proyectos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
             <span className="small muted">{lista.length} de {data.activos.length}</span>
+            <span className="spacer" />
+            <Segmented etiqueta="Vista" valor={vista} onChange={cambiarVista} opciones={[{ valor: "tarjetas", etiqueta: "Tarjetas" }, { valor: "tabla", etiqueta: "Tabla" }]} />
           </div>
+          {vista === "tarjetas" ? (
+            lista.length === 0 ? <p className="small muted">Ningún activo coincide con la búsqueda.</p> : (
+              <div className="cards">{lista.map((a) => <TarjetaActivo key={a.id} activo={a} />)}</div>
+            )
+          ) : (
           <div className="panel">
             <div className="table-wrap">
               <table className="tabla tabla-clic">
@@ -86,6 +100,7 @@ export function Activos() {
               </table>
             </div>
           </div>
+          )}
         </>
       )}
       <ActivoModal abierto={modal} onClose={() => setModal(false)} />

@@ -14,10 +14,12 @@ Decisiones de diseño (útiles para la defensa oral):
 import ipaddress
 import os
 import re
+import signal
 import socket
 import subprocess
+import time
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 # Puertos bien conocidos (1-1024) + puertos típicos de desarrollo y bases de datos.
@@ -107,27 +109,65 @@ def argumentos_de_puertos(perfil: Optional[str], puertos: Optional[str]) -> List
     return ["-p", os.getenv("NMAP_PORTS", DEFAULT_PORTS)]
 
 
+def _matar(proceso: "subprocess.Popen") -> None:
+    """Termina el proceso y todo su grupo (así no quedan procesos hijos con las tuberías abiertas)."""
+    try:
+        os.killpg(proceso.pid, signal.SIGKILL)
+    except (AttributeError, ProcessLookupError, PermissionError):
+        proceso.kill()
+
+
 def escanear_puertos(
     ip: str,
     puertos: Optional[str] = None,
     perfil: Optional[str] = None,
     timeout: Optional[int] = None,
     versiones: bool = True,
+    cancelar: Optional[Callable[[], bool]] = None,
 ) -> List[Dict]:
-    """Ejecuta Nmap (-sT, y -sV si `versiones`) sobre una IP ya validada y devuelve los puertos abiertos."""
+    """
+    Ejecuta Nmap (-sT, y -sV si `versiones`) sobre una IP ya validada y devuelve los puertos abiertos.
+
+    Si se entrega `cancelar`, se consulta cada segundo y, si devuelve True, se termina el proceso
+    de Nmap y se lanza EvaluacionCancelada.
+    """
     ipaddress.ip_address(ip)  # lanza ValueError si no es una IP válida (defensa extra)
     timeout = timeout or NMAP_TIMEOUT
     comando = ["nmap", "-sT"] + (["-sV"] if versiones else []) + ["-T4"]
     comando += argumentos_de_puertos(perfil, puertos) + ["-oX", "-", ip]
-    try:
-        proceso = subprocess.run(
-            comando, capture_output=True, text=True, timeout=timeout, check=False
-        )
-    except FileNotFoundError:
-        raise ScanError("Nmap no está instalado en el servidor")
-    except subprocess.TimeoutExpired:
-        raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)")
+    if cancelar is None:
+        try:
+            proceso = subprocess.run(
+                comando, capture_output=True, text=True, timeout=timeout, check=False
+            )
+        except FileNotFoundError:
+            raise ScanError("Nmap no está instalado en el servidor")
+        except subprocess.TimeoutExpired:
+            raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)")
+        codigo, salida, errores = proceso.returncode, proceso.stdout, proceso.stderr
+    else:
+        from app.cancelacion import EvaluacionCancelada
 
-    if proceso.returncode != 0:
-        raise ScanError(f"Nmap terminó con error: {proceso.stderr.strip()[:200]}")
-    return parsear_xml_nmap(proceso.stdout)
+        try:
+            proceso = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+        except FileNotFoundError:
+            raise ScanError("Nmap no está instalado en el servidor")
+        inicio = time.monotonic()
+        while True:
+            try:
+                salida, errores = proceso.communicate(timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                if cancelar():
+                    _matar(proceso)
+                    proceso.communicate()
+                    raise EvaluacionCancelada()
+                if time.monotonic() - inicio > timeout:
+                    _matar(proceso)
+                    proceso.communicate()
+                    raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)")
+        codigo = proceso.returncode
+
+    if codigo != 0:
+        raise ScanError(f"Nmap terminó con error: {errores.strip()[:200]}")
+    return parsear_xml_nmap(salida)

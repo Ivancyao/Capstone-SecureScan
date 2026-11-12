@@ -8,20 +8,38 @@ import { EvaluarBoton, NoEncontrado, ResumenSeveridad, TablaHallazgos } from "..
 import { useData } from "../context/DataContext.jsx";
 import { fmtDuracion, fmtFecha, fmtFechaHora, esHostPrivado, hace, hostDe, plural } from "../lib/format.js";
 import { ordenSev } from "../lib/risk.js";
+import { evaluacionAnterior } from "../lib/comparar.js";
+
+const POR_PAGINA = 15;
 
 export function Evaluaciones() {
   useTitulo("Evaluaciones");
-  const { data } = useData();
+  const { data, cancelarEvaluacion, eliminarEvaluacion } = useData();
   const nav = useNavigate();
   const [filtro, setFiltro] = useState("todas");
+  const [pagina, setPagina] = useState(1);
   const ev = data.evaluaciones;
   const cuenta = {
     todas: ev.length,
     curso: ev.filter((e) => e.enCurso).length,
     completada: ev.filter((e) => e.estado === "completada").length,
     fallida: ev.filter((e) => e.estado === "fallida").length,
+    cancelada: ev.filter((e) => e.estado === "cancelada").length,
   };
-  const lista = ev.filter((e) => filtro === "todas" || (filtro === "curso" ? e.enCurso : e.estado === filtro));
+  const filtradas = ev.filter((e) => filtro === "todas" || (filtro === "curso" ? e.enCurso : e.estado === filtro));
+  const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const actual = Math.min(pagina, paginas); // si el filtro deja menos páginas, se vuelve a la última
+  const lista = filtradas.slice((actual - 1) * POR_PAGINA, actual * POR_PAGINA);
+  const pedirCancelar = async (e) => {
+    if (window.confirm(`¿Cancelar la evaluación de “${e.activo?.nombre}”? Se detiene el escaneo y se descartan los resultados parciales.`)) {
+      try { await cancelarEvaluacion(e.id); } catch { /* aviso mostrado */ }
+    }
+  };
+  const pedirEliminar = async (e) => {
+    if (window.confirm(`¿Eliminar la evaluación de “${e.activo?.nombre}” del ${fmtFechaHora(e.iniciada_en)}? Se borran también sus hallazgos y no se puede deshacer.`)) {
+      try { await eliminarEvaluacion(e.id); } catch { /* aviso mostrado */ }
+    }
+  };
 
   return (
     <>
@@ -40,19 +58,20 @@ export function Evaluaciones() {
             <Segmented
               etiqueta="Filtrar por estado"
               valor={filtro}
-              onChange={setFiltro}
+              onChange={(v) => { setFiltro(v); setPagina(1); }}
               opciones={[
                 { valor: "todas", etiqueta: "Todas", n: cuenta.todas },
                 { valor: "curso", etiqueta: "En curso", n: cuenta.curso },
                 { valor: "completada", etiqueta: "Completadas", n: cuenta.completada },
                 { valor: "fallida", etiqueta: "Fallidas", n: cuenta.fallida },
+                ...(cuenta.cancelada ? [{ valor: "cancelada", etiqueta: "Canceladas", n: cuenta.cancelada }] : []),
               ]}
             />
           </div>
           <div className="panel">
             <div className="table-wrap">
               <table className="tabla tabla-clic">
-                <thead><tr><th>Activo</th><th>Estado</th><th>Hallazgos</th><th>Inicio</th><th className="right">Duración</th></tr></thead>
+                <thead><tr><th>Activo</th><th>Estado</th><th>Hallazgos</th><th>Inicio</th><th className="right">Duración</th><th><span className="sr-only">Acciones</span></th></tr></thead>
                 <tbody>
                   {lista.map((e) => (
                     <tr key={e.id} onClick={() => nav(`/evaluaciones/${e.id}`)}>
@@ -73,12 +92,31 @@ export function Evaluaciones() {
                       </td>
                       <td className="nowrap">{fmtFechaHora(e.iniciada_en)}<span className="sub">{hace(e.iniciada_en)}</span></td>
                       <td className="right num">{fmtDuracion(e.iniciada_en, e.finalizada_en)}</td>
+                      <td className="right" onClick={(x) => x.stopPropagation()}>
+                        {e.enCurso ? (
+                          <button className="btn btn-sm" onClick={() => pedirCancelar(e)}><Icon name="x" size={14} /> Cancelar</button>
+                        ) : (
+                          <button className="btn btn-sm btn-icon" aria-label={`Eliminar la evaluación de ${e.activo?.nombre}`} title="Eliminar" onClick={() => pedirEliminar(e)}><Icon name="trash" size={14} /></button>
+                        )}
+                      </td>
                     </tr>
                   ))}
-                  {lista.length === 0 && <tr><td colSpan={5} className="muted small">No hay evaluaciones con ese estado.</td></tr>}
+                  {lista.length === 0 && <tr><td colSpan={6} className="muted small">No hay evaluaciones con ese estado.</td></tr>}
                 </tbody>
               </table>
             </div>
+            {paginas > 1 && (
+              <nav className="paginacion" aria-label="Paginación de evaluaciones">
+                <span className="small muted">
+                  Mostrando {(actual - 1) * POR_PAGINA + 1}–{Math.min(actual * POR_PAGINA, filtradas.length)} de {filtradas.length}
+                </span>
+                <span className="row">
+                  <button className="btn btn-sm" onClick={() => setPagina(actual - 1)} disabled={actual === 1}><Icon name="arrow-left" size={14} /> Anterior</button>
+                  <span className="small num" aria-current="page">Página {actual} de {paginas}</span>
+                  <button className="btn btn-sm" onClick={() => setPagina(actual + 1)} disabled={actual === paginas}>Siguiente <Icon name="arrow-right" size={14} /></button>
+                </span>
+              </nav>
+            )}
           </div>
         </>
       )}
@@ -224,7 +262,7 @@ const ETAPAS = [
 
 export function EvaluacionDetalle() {
   const { id } = useParams();
-  const { data } = useData();
+  const { data, cancelarEvaluacion, eliminarEvaluacion } = useData();
   const nav = useNavigate();
   const [filtro, setFiltro] = useState("todos");
   const e = data.evaluacionPorId[id];
@@ -249,8 +287,22 @@ export function EvaluacionDetalle() {
         descripcion={`Iniciada el ${fmtFechaHora(e.iniciada_en)} · ${e.proyecto?.nombre}`}
         acciones={
           <>
+            {completada && evaluacionAnterior(data.evaluaciones, e) && <Link to={`/evaluaciones/${e.id}/comparar`} className="btn"><Icon name="layers" size={16} /> Comparar con la anterior</Link>}
             {completada && <Link to={`/reportes?proyecto=${e.proyecto?.id}`} className="btn"><Icon name="file" size={16} /> Generar reporte</Link>}
             {a && !e.enCurso && <EvaluarBoton activo={a} texto="Volver a evaluar" />}
+            {e.enCurso ? (
+              <button className="btn btn-danger" onClick={async () => {
+                if (window.confirm("¿Cancelar esta evaluación? Se detiene el escaneo y se descartan los resultados parciales.")) {
+                  try { await cancelarEvaluacion(e.id); } catch { /* aviso mostrado */ }
+                }
+              }}><Icon name="x" size={16} /> Cancelar evaluación</button>
+            ) : (
+              <button className="btn" onClick={async () => {
+                if (window.confirm("¿Eliminar esta evaluación? Se borran también sus hallazgos y no se puede deshacer.")) {
+                  try { await eliminarEvaluacion(e.id); nav("/evaluaciones"); } catch { /* aviso mostrado */ }
+                }
+              }}><Icon name="trash" size={16} /> Eliminar</button>
+            )}
           </>
         }
       />
@@ -284,6 +336,12 @@ export function EvaluacionDetalle() {
         </div>
       )}
 
+      {e.estado === "cancelada" && (
+        <Aviso tipo="info">
+          <strong>Cancelaste esta evaluación.</strong> No se guardaron resultados. Puedes volver a evaluar el activo o eliminar este registro.
+        </Aviso>
+      )}
+
       {e.estado === "fallida" && (
         <div className="stack">
           <ErrorNote accion={a && <EvaluarBoton activo={a} texto="Reintentar" pequeno />}>
@@ -307,7 +365,7 @@ export function EvaluacionDetalle() {
       {completada && (
         <div className="grid-main">
           <div className="stack">
-            <Panel titulo="Mapa de puertos" descripcion={`${plural(puertosAbiertos, "puerto abierto", "puertos abiertos")}${hallazgosWeb ? ` y ${plural(hallazgosWeb, "hallazgo web", "hallazgos web")} (no asociados a un puerto)` : ""} · toca un puerto para ver el detalle`}>
+            <Panel className="panel-hero" titulo="Mapa de puertos" descripcion={`${plural(puertosAbiertos, "puerto abierto", "puertos abiertos")}${hallazgosWeb ? ` y ${plural(hallazgosWeb, "hallazgo web", "hallazgos web")} (no asociados a un puerto)` : ""} · toca un puerto para ver el detalle`}>
               <div className="stack-sm">
                 <PortMap hallazgos={hs} alSeleccionar={(h) => nav(`/hallazgos/${h.id}`)} />
                 <LeyendaSev />

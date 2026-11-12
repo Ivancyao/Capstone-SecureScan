@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "./Icon.jsx";
 import { ESTADOS, ROLES, SEV } from "../lib/risk.js";
@@ -15,11 +15,12 @@ export function Logo({ size = 30, texto = true, claro = false }) {
   return (
     <span className={`logo ${claro ? "logo-claro" : ""}`}>
       <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="7" fill="#0B2038" />
-        <rect x="6" y="6" width="9" height="9" rx="2" fill="#2BB6D6" />
-        <rect x="17" y="6" width="9" height="9" rx="2" fill="#3A5370" />
-        <rect x="6" y="17" width="9" height="9" rx="2" fill="#3A5370" />
-        <rect x="17" y="17" width="9" height="9" rx="2" fill="#E06A1B" />
+        <rect width="32" height="32" rx="8" fill="#0B0F1E" />
+        <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#2B3552" />
+        <rect x="6" y="6" width="9" height="9" rx="2" fill="#7B92FF" />
+        <rect x="17" y="6" width="9" height="9" rx="2" fill="#2B3552" />
+        <rect x="6" y="17" width="9" height="9" rx="2" fill="#2B3552" />
+        <rect x="17" y="17" width="9" height="9" rx="2" fill="#FF8A3D" />
       </svg>
       {texto && <span className="logo-texto">SecureScan</span>}
     </span>
@@ -276,5 +277,41 @@ export function Modal({ abierto, onClose, titulo, descripcion, children, pie, an
         {pie && <div className="modal-foot">{pie}</div>}
       </div>
     </div>
+  );
+}
+
+// ---------- Cifra que sube hasta su valor (una sola vez al montar; sin animación si se prefiere menos movimiento) ----------
+export function Contador({ valor, duracion = 700 }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !valor) {
+      setN(valor);
+      return undefined;
+    }
+    let raf;
+    const t0 = performance.now();
+    const paso = (t) => {
+      const k = Math.min(1, (t - t0) / duracion);
+      setN(Math.round(valor * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = requestAnimationFrame(paso);
+    };
+    raf = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(raf);
+  }, [valor, duracion]);
+  return <span className="num">{n}</span>;
+}
+
+// ---------- Tarjeta de cifra clave: toda ella es un enlace ----------
+export function TarjetaKpi({ to, icono, etiqueta, valor, pie, tono = "var(--accent)" }) {
+  return (
+    <Link to={to} className="kpi" style={{ "--kpi-c": tono }}>
+      <span className="kpi-top">
+        <span className="kpi-ic"><Icon name={icono} size={18} /></span>
+        <Icon name="chevron-right" size={16} className="kpi-go" />
+      </span>
+      <span className="kpi-n"><Contador valor={valor} /></span>
+      <span className="kpi-et">{etiqueta}</span>
+      {pie && <span className="kpi-pie">{pie}</span>}
+    </Link>
   );
 }

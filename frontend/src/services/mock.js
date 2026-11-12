@@ -28,6 +28,21 @@ function guardar() {
     /* ignorar */
   }
 }
+function guardarAnalisis(u, { tipo, objetivo, tamano_bytes = null, senales, veredicto }) {
+  const frases = {
+    malicioso: "Peligroso: se detectó una firma de malware conocida.",
+    sospechoso: "Sospechoso: algún indicador local lo señala. No lo abras ni lo compartas hasta confirmarlo.",
+    sin_datos: "Sin veredicto: VirusTotal no está configurado, solo hay indicadores locales.",
+  };
+  const ahora = new Date().toISOString();
+  const a = {
+    id: uid(), usuario_id: u.id, tipo, objetivo, sha256: null, tamano_bytes, estado: "completado", veredicto, resumen: frases[veredicto],
+    detalle: { virustotal: null, senales, cabeceras: null, avisos: ["Modo de ejemplo: no hay conexión con VirusTotal."] }, creado_en: ahora, finalizado_en: ahora,
+  };
+  (db.analisis = db.analisis || []).push(a);
+  guardar();
+  return clon(a);
+}
 const esperar = (ms = 220) => new Promise((r) => setTimeout(r, ms));
 const clon = (x) => JSON.parse(JSON.stringify(x));
 const fallo = (msg) => {
@@ -211,6 +226,70 @@ export const mock = {
     db.evaluaciones.push(ev);
     guardar();
     return clon(resolver(ev));
+  },
+  async cancelarEvaluacion(id) {
+    await esperar(150);
+    const u = requerirUsuario();
+    const bruta = visibles(u).evaluaciones.find((x) => x.id === id);
+    if (!bruta) fallo("Evaluación no encontrada");
+    const actual = resolver(bruta);
+    if (actual.estado !== "pendiente" && actual.estado !== "en_progreso") fallo("La evaluación ya terminó; no hay nada que cancelar.");
+    delete bruta._sim;
+    Object.assign(bruta, { estado: "fallida", etapa: "Cancelada", detalle_error: "Cancelada por el usuario.", finalizada_en: new Date().toISOString(), hallazgos: [] });
+    guardar();
+    return clon(bruta);
+  },
+  async eliminarEvaluacion(id) {
+    await esperar(150);
+    const u = requerirUsuario();
+    const bruta = visibles(u).evaluaciones.find((x) => x.id === id);
+    if (!bruta) fallo("Evaluación no encontrada");
+    const actual = resolver(bruta);
+    if (actual.estado === "pendiente" || actual.estado === "en_progreso") fallo("La evaluación está en curso: cancélala antes de eliminarla.");
+    db.evaluaciones = db.evaluaciones.filter((x) => x.id !== id);
+    guardar();
+  },
+  // ---------- Análisis de URL / archivo (simulado: solo indicadores locales, sin VirusTotal) ----------
+  async analisisEstado() {
+    requerirUsuario();
+    return { virustotal: false, max_mb: 20 };
+  },
+  async listarAnalisis() {
+    await esperar(120);
+    const u = requerirUsuario();
+    return clon((db.analisis || []).filter((a) => a.usuario_id === u.id).sort((a, b) => b.creado_en.localeCompare(a.creado_en)));
+  },
+  async obtenerAnalisis(id) {
+    const u = requerirUsuario();
+    const a = (db.analisis || []).find((x) => x.id === id && x.usuario_id === u.id);
+    return a ? clon(a) : fallo("Análisis no encontrado");
+  },
+  async analizarUrl(url) {
+    await esperar(500);
+    const u = requerirUsuario();
+    if (!/^https?:\/\//i.test(url)) fallo("La URL debe empezar con http:// o https://");
+    const senales = [];
+    if (/^http:/i.test(url)) senales.push({ codigo: "sin_https", nivel: "bajo", texto: "No usa HTTPS: el tráfico viaja sin cifrar." });
+    if (/\/\/\d{1,3}(\.\d{1,3}){3}/.test(url)) senales.push({ codigo: "ip_literal", nivel: "medio", texto: "La dirección es una IP en vez de un nombre: es habitual en sitios temporales o de phishing." });
+    if (/\/\/(bit\.ly|tinyurl\.com|t\.co)\//i.test(url)) senales.push({ codigo: "acortador", nivel: "medio", texto: "Es un acortador de enlaces: oculta el destino real." });
+    const veredicto = senales.some((x) => x.nivel !== "bajo") ? "sospechoso" : "sin_datos";
+    return guardarAnalisis(u, { tipo: "url", objetivo: url, senales, veredicto });
+  },
+  async analizarArchivo(archivo) {
+    await esperar(600);
+    const u = requerirUsuario();
+    const texto = await archivo.slice(0, 1024).text().catch(() => "");
+    const senales = [];
+    if (texto.includes("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) senales.push({ codigo: "eicar", nivel: "alto", texto: "Contiene la firma de prueba EICAR: los antivirus la detectan a propósito. Es inofensiva, pero confirma que el análisis funciona.", concluyente: true });
+    if (/\.(pdf|docx?|xlsx?|jpe?g|png)\.(exe|scr|bat|cmd|js|vbs)$/i.test(archivo.name)) senales.push({ codigo: "doble_extension", nivel: "alto", texto: "Doble extensión: un ejecutable disfrazado de documento es una táctica común de malware." });
+    const veredicto = senales.some((x) => x.concluyente) ? "malicioso" : senales.length ? "sospechoso" : "sin_datos";
+    return guardarAnalisis(u, { tipo: "archivo", objetivo: archivo.name, tamano_bytes: archivo.size, senales, veredicto });
+  },
+  async eliminarAnalisis(id) {
+    await esperar(100);
+    const u = requerirUsuario();
+    db.analisis = (db.analisis || []).filter((a) => !(a.id === id && a.usuario_id === u.id));
+    guardar();
   },
   async marcarCorregido(hallazgoId, corregido) {
     await esperar(120);
