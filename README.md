@@ -7,6 +7,7 @@ Está dirigida a pymes y equipos de TI sin presupuesto para herramientas comerci
 
 ## Integrantes y roles
 - **Ivan Escobar** – Proyecto individual. Todos los roles: arquitectura, backend, frontend, motor de escaneo, pruebas, despliegue y documentación.
+- **Docente:** Profesora Karla Marilyn Roco Ramirez.
 
 ## Tecnologías
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy, JWT (PyJWT), bcrypt
