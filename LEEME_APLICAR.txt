@@ -1,0 +1,12 @@
+SecureScan - versión final con endurecimiento y limpieza de código
+
+1. Copia estos archivos sobre tu repositorio respetando las carpetas (reemplaza los existentes).
+   Archivos nuevos: backend/app/limitador.py, backend/app/tiempo.py, backend/tests/test_seguridad_extra.py
+2. En tu .env define SECRET_KEY y ZAP_API_KEY con valores largos y aleatorios, por ejemplo:
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+   (.env nunca se sube a GitHub)
+3. Reconstruye:  docker compose up -d --build
+4. Pruebas:  cd backend && pytest   (esperado: 138 passed, 1 skipped, 1 warning)
+5. Prueba la demo completa una vez (login, escaneo contra Juice Shop, PDF) antes del 27 de noviembre.
+6. Borra del repo: Fase 2/.../2.6_..._BORRADOR_v4.docx, el 2.4 original, LEEME.txt y Fase 2/README.md vacio.
+7. Rota tu clave de VirusTotal (la anterior quedó expuesta en la conversación) y ponla solo en .env.

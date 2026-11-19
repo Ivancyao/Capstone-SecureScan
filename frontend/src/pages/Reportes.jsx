@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.jsx";
-import { Aviso, Campo, EmptyState, Modal, PageHeader, Panel, SevBadge, Tag, useTitulo } from "../components/ui.jsx";
+import { Aviso, Campo, EmptyState, Modal, PageHeader, SevBadge, useTitulo } from "../components/ui.jsx";
 import { SeverityBar } from "../components/charts.jsx";
 import { NoEncontrado } from "../components/shared.jsx";
 import { useData } from "../context/DataContext.jsx";

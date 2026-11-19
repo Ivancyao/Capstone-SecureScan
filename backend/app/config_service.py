@@ -8,15 +8,15 @@ cambio hecho desde la web no puede, por sí solo, abrir el escáner hacia intern
 """
 import copy
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict
 
 from sqlalchemy.orm import Session
 
 from app.models import Configuracion
+from app.tiempo import ahora_utc
 
 CLAVE = "escaneo"
-PERFILES_PUERTOS = ("predeterminado", "rapido", "completo")
 RANGOS_PERMITIDOS = [
     "10.0.0.0/8",
     "172.16.0.0/12",
@@ -90,7 +90,7 @@ def guardar(db: Session, cfg: Dict[str, Any]) -> Dict[str, Any]:
         db.add(fila)
     else:
         fila.valor = limpio
-        fila.actualizado_en = datetime.utcnow()
+        fila.actualizado_en = ahora_utc()
     db.commit()
     return obtener(db)
 
@@ -101,17 +101,15 @@ def publicas_efectivas(cfg: Dict[str, Any]) -> bool:
 
 
 def aplicar_retencion(db: Session) -> int:
-    """
-    Borra evaluaciones más antiguas que `retencion_dias`. Nunca borra la evaluación
-    completada más reciente de cada activo (es el "estado vigente" del activo).
-    Devuelve cuántas borró. 0 días = sin límite.
+    """Borra las evaluaciones más antiguas que `retencion_dias`, pero nunca la última evaluación
+    completada de cada activo (es su estado actual). Devuelve cuántas borró. 0 días = sin límite.
     """
     from app.models import EstadoEvaluacion, Evaluacion
 
     dias = obtener(db)["retencion_dias"]
     if not dias:
         return 0
-    limite = datetime.utcnow() - timedelta(days=dias)
+    limite = ahora_utc() - timedelta(days=dias)
     vigentes = {}  # activo_id -> id de su evaluación completada más reciente
     for ev in (
         db.query(Evaluacion)

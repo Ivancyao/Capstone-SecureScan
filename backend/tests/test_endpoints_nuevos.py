@@ -7,7 +7,7 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_securescan.db"
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +17,8 @@ from app import config_service, scanner
 from app.database import Base, SessionLocal, engine
 from app.main import _cerrar_evaluaciones_huerfanas, app
 from app.migrar import agregar_columnas_faltantes
-from app.models import Activo, EstadoEvaluacion, Evaluacion, Hallazgo, SeveridadHallazgo
+from app.models import EstadoEvaluacion, Evaluacion, Hallazgo, SeveridadHallazgo
+from app.tiempo import ahora_utc
 
 client = TestClient(app)
 PWD = "Password123"
@@ -64,8 +65,8 @@ def evaluacion_completada(activo_id, hallazgos=(("Telnet expuesto", "alta", 7.5)
     ev = Evaluacion(
         activo_id=activo_id,
         estado=EstadoEvaluacion.COMPLETADA,
-        iniciada_en=datetime.utcnow() - timedelta(days=hace_dias),
-        finalizada_en=datetime.utcnow() - timedelta(days=hace_dias),
+        iniciada_en=ahora_utc() - timedelta(days=hace_dias),
+        finalizada_en=ahora_utc() - timedelta(days=hace_dias),
     )
     db.add(ev)
     db.flush()
@@ -278,7 +279,7 @@ def test_no_se_lanzan_dos_evaluaciones_a_la_vez(admin):
 def test_una_evaluacion_colgada_no_bloquea_para_siempre(admin):
     _, a = crear_activo(admin)
     db = SessionLocal()
-    db.add(Evaluacion(activo_id=a["id"], estado=EstadoEvaluacion.EN_PROGRESO, iniciada_en=datetime.utcnow() - timedelta(hours=3)))
+    db.add(Evaluacion(activo_id=a["id"], estado=EstadoEvaluacion.EN_PROGRESO, iniciada_en=ahora_utc() - timedelta(hours=3)))
     db.commit()
     db.close()
     assert client.post(f"/activos/{a['id']}/evaluaciones", headers=admin).status_code == 201

@@ -1,12 +1,11 @@
-"""
-Métricas del panel, calculadas en la base de datos con consultas de agregación (GROUP BY).
+"""Métricas del panel, calculadas en la base de datos con consultas de agregación (GROUP BY).
 
 Definiciones (las mismas que usa la interfaz):
-- "Vigente": hallazgos de la ÚLTIMA evaluación completada de cada activo. Las evaluaciones
-  anteriores son historial y no cuentan como riesgo actual.
+- "Vigente": hallazgos de la última evaluación completada de cada activo. Las anteriores son
+  historial y no cuentan como riesgo actual.
 - "Abierto": hallazgo vigente que no está marcado como corregido.
-- Por semana: todos los hallazgos de las evaluaciones completadas de las últimas 8 semanas
-  (semana = lunes a domingo, en UTC), agrupados por severidad.
+- Por semana: hallazgos de las evaluaciones completadas de las últimas 8 semanas (lunes a domingo,
+  en UTC), agrupados por severidad.
 
 Solo se consideran los proyectos que el usuario puede ver (los suyos; el admin ve todos).
 """
@@ -21,6 +20,7 @@ from app.database import get_db
 from app.models import Activo, EstadoEvaluacion, Evaluacion, Hallazgo, SeveridadHallazgo, Usuario
 from app.routers.proyectos import _ids_de_proyectos_visibles
 from app.security import get_current_user
+from app.tiempo import ahora_utc
 
 router = APIRouter(tags=["Métricas"])
 
@@ -41,13 +41,13 @@ def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_
     ids = _ids_de_proyectos_visibles(db, user)
     vacio = {
         "totales": {"proyectos": 0, "activos": 0, "evaluaciones": 0, "completadas": 0, "fallidas": 0, "en_curso": 0, "hallazgos_abiertos": 0, "hallazgos_corregidos": 0},
-        "por_severidad": {s: 0 for s in SEVERIDADES},
+        "por_severidad": dict.fromkeys(SEVERIDADES, 0),
         "por_owasp": [],
         "por_semana": [],
     }
-    hoy_lunes = _lunes(datetime.utcnow().date())
+    hoy_lunes = _lunes(ahora_utc().date())
     semanas = [hoy_lunes - timedelta(weeks=i) for i in range(SEMANAS - 1, -1, -1)]
-    vacio["por_semana"] = [{"inicio": s.isoformat(), **{x: 0 for x in SEVERIDADES}, "total": 0} for s in semanas]
+    vacio["por_semana"] = [{"inicio": s.isoformat(), **dict.fromkeys(SEVERIDADES, 0), "total": 0} for s in semanas]
     if not ids:
         return vacio
 
@@ -76,7 +76,7 @@ def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_
     abierto = or_(Hallazgo.corregido.is_(None), Hallazgo.corregido != "si")
 
     # ---- GROUP BY severidad (hallazgos abiertos vigentes) ----
-    por_severidad = {s: 0 for s in SEVERIDADES}
+    por_severidad = dict.fromkeys(SEVERIDADES, 0)
     for sev, cuenta in (
         db.query(Hallazgo.severidad, func.count(Hallazgo.id))
         .filter(Hallazgo.evaluacion_id.in_(db.query(vigentes.c.id)), abierto)

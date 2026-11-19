@@ -6,7 +6,7 @@ Documentación interactiva automática:  http://localhost:8000/docs
 """
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401  (registra los modelos en Base.metadata)
@@ -52,6 +52,18 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Total-Count"],  # total de la paginación (GET /evaluaciones?pagina=...)
 )
+
+
+
+@app.middleware("http")
+async def cabeceras_de_seguridad(request: Request, call_next):
+    respuesta = await call_next(request)
+    respuesta.headers.setdefault("X-Content-Type-Options", "nosniff")
+    respuesta.headers.setdefault("X-Frame-Options", "DENY")
+    respuesta.headers.setdefault("Referrer-Policy", "no-referrer")
+    respuesta.headers.setdefault("Cache-Control", "no-store")
+    return respuesta
+
 
 app.include_router(auth.router)
 app.include_router(proyectos.router)

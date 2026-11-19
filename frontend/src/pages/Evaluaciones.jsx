@@ -6,7 +6,7 @@ import { LeyendaSev, SeverityBar } from "../components/charts.jsx";
 import { PortMap, construirPuertos } from "../components/PortMap.jsx";
 import { EvaluarBoton, NoEncontrado, ResumenSeveridad, TablaHallazgos } from "../components/shared.jsx";
 import { useData } from "../context/DataContext.jsx";
-import { fmtDuracion, fmtFecha, fmtFechaHora, esHostPrivado, hace, hostDe, plural } from "../lib/format.js";
+import { fmtDuracion, fmtFechaHora, esHostPrivado, hace, hostDe, plural } from "../lib/format.js";
 import { ordenSev } from "../lib/risk.js";
 import { evaluacionAnterior } from "../lib/comparar.js";
 

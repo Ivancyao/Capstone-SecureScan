@@ -53,6 +53,8 @@ cd frontend && npm run dev
 | `/proyectos`, `/proyectos/:id` | Lista y detalle con pestañas | `/proyectos` |
 | `/activos`, `/activos/:id` | Lista y detalle, mapa de puertos, historial | `/activos`, `/proyectos/{id}/activos` |
 | `/evaluaciones`, `/evaluaciones/nueva`, `/evaluaciones/:id` | Lista, formulario con confirmación de autorización, avance en vivo y resultados | `/evaluaciones?ultimas=10`, `/activos/{id}/evaluaciones` |
+| `/evaluaciones/:id/comparar` | Qué cambió respecto de la evaluación anterior del mismo activo | `/evaluaciones/{id}` |
+| `/analisis` | Análisis rápido de una URL o un archivo (huella SHA-256, indicadores locales, VirusTotal) | `/analisis/url`, `/analisis/archivo`, `/analisis` |
 | `/hallazgos`, `/hallazgos/:id` | Filtros, búsqueda, detalle con CVSS y recomendación, marcar como corregido | `PATCH /hallazgos/{id}` |
 | `/reportes`, `/reportes/:id` | Lista, generación y descarga del PDF | `/reportes`, `/proyectos/{id}/reportes`, `/reportes/{id}/descargar` |
 | `/usuarios` | Usuarios, roles, contraseña temporal (solo admin) | `/usuarios` |

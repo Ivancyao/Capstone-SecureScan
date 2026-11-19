@@ -5,10 +5,11 @@ Estructura: portada con resumen ejecutivo, activos evaluados, hallazgos prioriza
 recomendaciones y limitaciones. La severidad siempre va con texto (no solo color).
 """
 import io
+import os
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape  # nosec B406
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -18,6 +19,17 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (
     KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
+
+def _hora_local(dt: datetime) -> datetime:
+    """Convierte una fecha guardada en UTC (sin zona) a la hora local (APP_TZ, por defecto America/Santiago)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.astimezone(ZoneInfo(os.getenv("APP_TZ", "America/Santiago")))
+    except Exception:  # sin base de zonas horarias: UTC-3 fijo (horario de verano de Chile)
+        return dt.astimezone(timezone(timedelta(hours=-3)))
+
 
 ORDEN = ["critica", "alta", "media", "baja", "informativa"]
 ETIQUETA = {"critica": "Crítica", "alta": "Alta", "media": "Media", "baja": "Baja", "informativa": "Informativa"}
@@ -96,7 +108,7 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
     # ---- Portada y resumen ejecutivo ----
     h.append(Paragraph(_e(titulo), est["titulo"]))
     h.append(Paragraph(f"Proyecto: <b>{_e(proyecto['nombre'])}</b>", est["sub"]))
-    h.append(Paragraph(f"Generado el {datetime.now():%d/%m/%Y %H:%M} por {_e(generado_por)} · {len(evaluaciones)} evaluación(es) incluida(s)", est["sub"]))
+    h.append(Paragraph(f"Generado el {_hora_local(datetime.now(timezone.utc)):%d/%m/%Y %H:%M} por {_e(generado_por)} · {len(evaluaciones)} evaluación(es) incluida(s)", est["sub"]))
 
     h.append(Paragraph("Resumen ejecutivo", est["h2"]))
     if not abiertos:
@@ -127,7 +139,7 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
         filas.append([
             Paragraph(_e(ev["activo"]["nombre"]), est["celda_b"]),
             Paragraph(_e(ev["activo"]["url_objetivo"]), est["celda"]),
-            Paragraph(f"{ev['iniciada_en']:%d/%m/%Y %H:%M}", est["celda"]),
+            Paragraph(f"{_hora_local(ev['iniciada_en']):%d/%m/%Y %H:%M}", est["celda"]),
             Paragraph(str(len(ab)), est["celda"]),
             Paragraph(mayor, est["celda"]),
         ])

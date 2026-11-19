@@ -1,6 +1,6 @@
-// Gráficos hechos a mano en SVG/HTML: sin librerías, así se pueden explicar en la defensa.
-// Reglas: barras de hasta 24 px con extremo redondeado, 2 px de separación entre segmentos,
-// texto en tinta (nunca del color de la serie), tooltip al pasar el cursor y vista de tabla.
+// Gráficos hechos a mano en SVG/HTML, sin librerías.
+// Barras de hasta 24 px con extremo redondeado, 2 px entre segmentos, texto en color neutro,
+// tooltip al pasar el cursor y vista de tabla.
 import { useState } from "react";
 import { Icon } from "./Icon.jsx";
 import { SevMark } from "./ui.jsx";

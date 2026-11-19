@@ -1,25 +1,22 @@
-"""
-Análisis rápido de una URL o de un archivo.
+"""Análisis rápido de una URL o de un archivo.
 
-Tres fuentes, de la más a la menos informativa:
-1. VirusTotal (reputación de la URL / del archivo según decenas de motores antivirus). Necesita la clave
-   VIRUSTOTAL_API_KEY en el servidor; sin ella se omite y el resultado lo dice.
-2. Señales locales: indicadores simples calculados aquí (huella SHA-256, firma de ejecutable, doble
-   extensión, prueba EICAR; en URL: IP literal, "@", punycode, muchos subdominios...). Son pistas, no un veredicto.
-3. Revisión pasiva de cabeceras de seguridad de la página (HSTS, CSP, X-Frame-Options...). Esta SÍ contacta
-   el sitio, así que respeta las mismas reglas de objetivos que los escaneos (redes privadas, o públicas con
-   los dos candados activos).
+Usa tres fuentes:
+1. VirusTotal: reputación de la URL o del archivo según varios motores antivirus. Necesita VIRUSTOTAL_API_KEY
+   en el servidor; si no está, se omite y el resultado lo indica.
+2. Señales locales: huella SHA-256, firma de ejecutable, doble extensión, prueba EICAR y, en las URL,
+   IP literal, "@", punycode, muchos subdominios. Son pistas, no un veredicto.
+3. Revisión de cabeceras de seguridad (HSTS, CSP, X-Frame-Options...). Esta sí contacta el sitio, así que
+   sigue las mismas reglas de objetivos que los escaneos.
 
-Decisiones de privacidad: el archivo no se guarda en disco ni en la base de datos, y solo se sube a VirusTotal
-si el usuario lo pide de forma explícita (VirusTotal comparte lo que recibe con la comunidad de seguridad).
-La clave de API nunca viaja al navegador.
+El archivo no se guarda en disco ni en la base de datos, y solo se sube a VirusTotal si el usuario lo
+autoriza. La clave de API nunca llega al navegador.
 """
 import base64
 import hashlib
+import ipaddress
 import os
 import re
 import time
-from datetime import datetime
 from typing import Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -28,6 +25,7 @@ import httpx
 from app import config_service, scanner
 from app.database import SessionLocal
 from app.models import Analisis
+from app.tiempo import ahora_utc
 
 VT_BASE = "https://www.virustotal.com/api/v3"
 MAX_ARCHIVO_BYTES = int(os.getenv("ANALISIS_MAX_MB", "20")) * 1024 * 1024  # VirusTotal acepta hasta 32 MB
@@ -65,7 +63,7 @@ class VirusTotal:
         try:
             r = self._http.request(metodo, ruta, **kw)
         except httpx.HTTPError:
-            raise AnalisisError("No se pudo conectar con VirusTotal. Revisa la conexión a internet del servidor.")
+            raise AnalisisError("No se pudo conectar con VirusTotal. Revisa la conexión a internet del servidor.") from None
         if r.status_code == 404:
             return None
         if r.status_code in (401, 403):
@@ -77,7 +75,7 @@ class VirusTotal:
         try:
             return r.json()
         except ValueError:
-            raise AnalisisError("Respuesta inesperada de VirusTotal.")
+            raise AnalisisError("Respuesta inesperada de VirusTotal.") from None
 
     @staticmethod
     def _id_url(url: str) -> str:
@@ -213,9 +211,8 @@ CABECERAS = [
 
 
 def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
-    """
-    Una sola petición GET (como la de un navegador) para leer las cabeceras de seguridad. Si el objetivo no
-    está permitido por las reglas de la plataforma, no se contacta y se explica por qué.
+    """Hace una sola petición GET para leer las cabeceras de seguridad. Si el objetivo no está permitido
+    por las reglas de la plataforma, no se contacta y se explica por qué.
     """
     p = urlparse(url)
     if p.scheme not in ("http", "https") or not p.hostname:
@@ -231,12 +228,18 @@ def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
         causa = str(exc).rstrip(". ")
         return {"contactado": False, "motivo": f"No se contactó el sitio. {causa}. La reputación (VirusTotal) sí se consulta sin tocar el sitio."}
 
+    ip_obj = ipaddress.ip_address(ip)
+    if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_unspecified:
+        # Evita que el análisis de una URL llegue al propio servidor o al servicio de metadatos de la nube (SSRF).
+        return {"contactado": False, "motivo": "No se contactó el sitio: apunta al propio servidor o a una dirección local. La reputación (VirusTotal) sí se consulta sin tocar el sitio."}
+
     puerto = p.port or (443 if p.scheme == "https" else 80)
     destino = f"{p.scheme}://{f'[{ip}]' if ':' in ip else ip}:{puerto}{p.path or '/'}"
     if p.query:
         destino += f"?{p.query}"
     propio = cliente is None
-    cliente = cliente or httpx.Client(timeout=8, verify=False, follow_redirects=False)  # se valida la IP, no el certificado
+    # Se conecta a la IP ya validada (no al nombre), por eso se valida la IP y no el certificado.
+    cliente = cliente or httpx.Client(timeout=8, verify=False, follow_redirects=False)  # nosec B501
     try:
         with cliente.stream("GET", destino, headers={"Host": p.netloc, "User-Agent": "SecureScan/1.2 (revision pasiva)"},
                             extensions={"sni_hostname": p.hostname}) as r:
@@ -332,10 +335,10 @@ def ejecutar_analisis(analisis_id: str, contenido: Optional[bytes] = None, subir
         if tipo == "url":
             detalle["cabeceras"] = revisar_cabeceras(objetivo, cliente_http)
         veredicto = veredicto_de(vt_info, detalle["senales"])
-        _guardar(analisis_id, estado="completado", veredicto=veredicto, detalle=detalle, finalizado_en=datetime.utcnow(),
+        _guardar(analisis_id, estado="completado", veredicto=veredicto, detalle=detalle, finalizado_en=ahora_utc(),
                  resumen=_frase(veredicto, vt_info, detalle["senales"], detalle["cabeceras"], con_vt))
     except Exception as exc:  # noqa: BLE001  nunca dejar el análisis "pendiente" para siempre
-        _guardar(analisis_id, estado="error", detalle=detalle, finalizado_en=datetime.utcnow(),
+        _guardar(analisis_id, estado="error", detalle=detalle, finalizado_en=ahora_utc(),
                  resumen=f"No se pudo completar el análisis ({type(exc).__name__}).")
 
 

@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 from app import scanner, zap_client
 from app.database import Base, engine
 from app.main import app
-from app.models import Hallazgo
 from app.zap_client import ZapClient, ZapError, agrupar_alertas, severidad_zap
 from app.zap_es import CATALOGO, traducir
 
@@ -53,12 +52,14 @@ def zap_falso(alertas, estados_spider=(50, 100), pendientes=(3, 0), llamadas=Non
         if ruta in ("/JSON/spider/action/scan/", "/JSON/ascan/action/scan/"):
             return httpx.Response(200, json={"scan": "0"})
         if ruta == "/JSON/spider/view/status/":
-            i = min(cont["spider"], len(estados_spider) - 1); cont["spider"] += 1
+            i = min(cont["spider"], len(estados_spider) - 1)
+            cont["spider"] += 1
             return httpx.Response(200, json={"status": str(estados_spider[i])})
         if ruta == "/JSON/ascan/view/status/":
             return httpx.Response(200, json={"status": "100"})
         if ruta == "/JSON/pscan/view/recordsToScan/":
-            i = min(cont["pscan"], len(pendientes) - 1); cont["pscan"] += 1
+            i = min(cont["pscan"], len(pendientes) - 1)
+            cont["pscan"] += 1
             return httpx.Response(200, json={"recordsToScan": str(pendientes[i])})
         if ruta == "/JSON/core/view/alerts/":
             ini, n = int(req.url.params["start"]), int(req.url.params["count"])

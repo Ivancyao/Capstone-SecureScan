@@ -121,21 +121,6 @@ export function Panel({ titulo, descripcion, acciones, children, flush = false, 
   );
 }
 
-export function Seccion({ titulo, descripcion, acciones, children }) {
-  return (
-    <section className="seccion">
-      <div className="seccion-head">
-        <div>
-          <h2 className="h-section">{titulo}</h2>
-          {descripcion && <p className="small muted">{descripcion}</p>}
-        </div>
-        {acciones}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 export function EmptyState({ icono = "folder", titulo, texto, accion }) {
   return (
     <div className="empty">

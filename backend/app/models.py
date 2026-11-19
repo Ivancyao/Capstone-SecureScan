@@ -9,7 +9,6 @@ Proyecto --- Reporte
 """
 import enum
 import uuid
-from datetime import datetime
 
 from sqlalchemy import (
     JSON, Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, Uuid
@@ -17,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.tiempo import ahora_utc
 
 
 def gen_uuid():
@@ -55,7 +55,7 @@ class Usuario(Base):
     password_hash = Column(String(255), nullable=False)
     rol = Column(Enum(RolUsuario), nullable=False, default=RolUsuario.USUARIO)
     activo = Column(Boolean, nullable=False, default=True)  # una cuenta desactivada no puede iniciar sesión
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=ahora_utc)
 
     proyectos = relationship("Proyecto", back_populates="propietario")
 
@@ -68,7 +68,7 @@ class Proyecto(Base):
     nombre = Column(String(150), nullable=False)
     descripcion = Column(Text, nullable=True)
     propietario_id = Column(Uuid(as_uuid=False), ForeignKey("usuarios.id"), nullable=False)
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=ahora_utc)
 
     propietario = relationship("Usuario", back_populates="proyectos")
     activos = relationship("Activo", back_populates="proyecto", cascade="all, delete-orphan")
@@ -84,7 +84,7 @@ class Activo(Base):
     nombre = Column(String(150), nullable=False)
     url_objetivo = Column(String(255), nullable=False)
     descripcion = Column(Text, nullable=True)
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=ahora_utc)
 
     proyecto = relationship("Proyecto", back_populates="activos")
     evaluaciones = relationship("Evaluacion", back_populates="activo", cascade="all, delete-orphan")
@@ -97,7 +97,7 @@ class Evaluacion(Base):
     id = Column(Uuid(as_uuid=False), primary_key=True, default=gen_uuid)
     activo_id = Column(Uuid(as_uuid=False), ForeignKey("activos.id"), nullable=False)
     estado = Column(Enum(EstadoEvaluacion), default=EstadoEvaluacion.PENDIENTE)
-    iniciada_en = Column(DateTime, default=datetime.utcnow)
+    iniciada_en = Column(DateTime, default=ahora_utc)
     finalizada_en = Column(DateTime, nullable=True)
     detalle_error = Column(Text, nullable=True)  # motivo si la evaluación falló
     progreso = Column(Integer, nullable=True)    # 0-100 mientras corre; permite mostrar avance en vivo
@@ -134,7 +134,7 @@ class Reporte(Base):
     proyecto_id = Column(Uuid(as_uuid=False), ForeignKey("proyectos.id"), nullable=False)
     titulo = Column(String(200), nullable=True)
     nombre_archivo = Column(String(255), nullable=False)    # nombre amigable al descargar
-    generado_en = Column(DateTime, default=datetime.utcnow)
+    generado_en = Column(DateTime, default=ahora_utc)
     generado_por = Column(String(120), nullable=True)
     evaluacion_ids = Column(JSON, nullable=True)             # evaluaciones incluidas en el informe
     tamano_kb = Column(Integer, nullable=True)
@@ -148,7 +148,7 @@ class Configuracion(Base):
 
     clave = Column(String(60), primary_key=True)
     valor = Column(JSON, nullable=False)
-    actualizado_en = Column(DateTime, default=datetime.utcnow)
+    actualizado_en = Column(DateTime, default=ahora_utc)
 
 
 class Analisis(Base):
@@ -168,5 +168,5 @@ class Analisis(Base):
     veredicto = Column(String(12), nullable=True)            # limpio | sospechoso | malicioso | sin_datos
     resumen = Column(Text, nullable=True)                    # frase para mostrar al usuario
     detalle = Column(JSON, nullable=True)                    # virustotal, señales, cabeceras
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=ahora_utc)
     finalizado_en = Column(DateTime, nullable=True)

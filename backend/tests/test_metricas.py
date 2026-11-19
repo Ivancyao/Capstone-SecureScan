@@ -17,6 +17,7 @@ from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models import Activo, EstadoEvaluacion, Evaluacion, Hallazgo, Proyecto, SeveridadHallazgo, Usuario
 from app.security import hash_password
+from app.tiempo import ahora_utc
 
 client = TestClient(app)
 SEV = [s.value for s in SeveridadHallazgo]
@@ -52,9 +53,9 @@ def sembrar(db, dueno, semilla=1, activos=6, evals_por_activo=5):
         a = Activo(proyecto_id=p.id, nombre=f"A{i}", url_objetivo="http://10.0.0.1")
         db.add(a)
         db.flush()
-        for j in range(evals_por_activo):
+        for _ in range(evals_por_activo):
             estado = rnd.choice([EstadoEvaluacion.COMPLETADA] * 4 + [EstadoEvaluacion.FALLIDA])
-            ev = Evaluacion(activo_id=a.id, estado=estado, iniciada_en=datetime.utcnow() - timedelta(days=rnd.randint(0, 80), hours=rnd.randint(0, 23)))
+            ev = Evaluacion(activo_id=a.id, estado=estado, iniciada_en=ahora_utc() - timedelta(days=rnd.randint(0, 80), hours=rnd.randint(0, 23)))
             db.add(ev)
             db.flush()
             hs = []
@@ -77,7 +78,7 @@ def esperado(todas):
             ultima[aid] = (ev, hs)
     sev, owasp = Counter(), Counter()
     corregidos = 0
-    for ev, hs in ultima.values():
+    for _, hs in ultima.values():
         for h in hs:
             if h.corregido == "si":
                 corregidos += 1
@@ -129,7 +130,7 @@ def test_cada_usuario_solo_ve_sus_metricas():
     todo = client.get("/metricas", headers=cab("admin@t.cl")).json()["totales"]
     solo_ana = client.get("/metricas", headers=cab("ana@t.cl")).json()["totales"]
     assert todo["activos"] == 8 and solo_ana["activos"] == 2 and solo_ana["proyectos"] == 1
-    otra = usuario(db, "otra@t.cl")
+    usuario(db, "otra@t.cl")
     vacio = client.get("/metricas", headers=cab("otra@t.cl")).json()
     assert vacio["totales"]["activos"] == 0 and len(vacio["por_semana"]) == 8
     assert client.get("/metricas").status_code == 401

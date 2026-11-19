@@ -148,7 +148,7 @@ DATABASE_URL=sqlite:///./rendimiento.db python tools/rendimiento.py
 | `test_zap.py` | Cliente de ZAP y su integración (incluida la cancelación), **con un simulacro del API de ZAP** (ver límites) |
 | `test_analisis.py` | Análisis rápido: indicadores locales, EICAR, consentimiento para subir archivos, límites, propiedad; **VirusTotal simulado** con `httpx.MockTransport` |
 
-**Límites de las pruebas:** ZAP real se validó en una corrida contra Juice Shop (06-11-2026), pero la suite usa un simulacro; VirusTotal real no se probó; el rendimiento se midió en SQLite y en PostgreSQL, con un solo usuario; la interfaz se verificó a mano en un navegador real, sin pruebas automáticas de interfaz en el repositorio.
+**Límites de las pruebas:** ZAP real se validó en una corrida contra Juice Shop (06-11-2026), pero la suite usa un simulacro; VirusTotal real se verificó el 12-11-2026 (example.com: 0 de 93 motores) y la suite lo simula; el rendimiento se midió en SQLite y en PostgreSQL, con un solo usuario; la interfaz se verificó a mano en un navegador real, sin pruebas automáticas de interfaz en el repositorio.
 
 ## 9. Solución de problemas
 

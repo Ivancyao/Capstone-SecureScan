@@ -1,17 +1,16 @@
-"""
-Cliente de OWASP ZAP (API REST) para analizar aplicaciones web.
+"""Cliente de OWASP ZAP (API REST) para analizar aplicaciones web.
 
-Flujo: spider (descubre las páginas) -> espera al análisis pasivo -> (opcional) escaneo activo
--> lectura de alertas. ZAP corre como contenedor aparte; aquí solo se le hacen peticiones.
+Flujo: spider (descubre las páginas) -> espera el análisis pasivo -> escaneo activo (opcional) -> lectura
+de alertas. ZAP corre en un contenedor aparte y aquí solo se le hacen peticiones.
 
 Seguridad:
-- El objetivo pasa por la MISMA validación que Nmap (solo redes privadas) antes de llegar aquí.
-- El escaneo ACTIVO envía cargas de ataque de prueba al objetivo; por eso está apagado por defecto
-  y solo lo activa un administrador desde la configuración.
-- Todo espera con un tiempo máximo: una evaluación nunca queda colgada esperando a ZAP.
+- El objetivo pasa por la misma validación que Nmap (solo redes privadas) antes de llegar aquí.
+- El escaneo activo manda ataques de prueba al objetivo, por eso viene apagado y solo un administrador
+  puede activarlo.
+- Todo espera con un tiempo máximo, así una evaluación no queda colgada esperando a ZAP.
 
-Honestidad técnica: la severidad se toma del nivel de riesgo de ZAP (High/Medium/Low/Info) y se
-traduce a un CVSS ESTIMADO por nivel; no es un cálculo vectorial. ZAP nunca produce "crítica".
+La severidad sale del nivel de riesgo de ZAP (High/Medium/Low/Info) y se traduce a un CVSS estimado por
+nivel, no es un cálculo completo. ZAP no entrega nivel "crítica".
 """
 import os
 import re
@@ -60,7 +59,7 @@ class ZapClient:
         try:
             r = self._http.get(ruta, params=params)
         except httpx.HTTPError:
-            raise ZapError(f"No se pudo conectar con OWASP ZAP en {self.base_url}")
+            raise ZapError(f"No se pudo conectar con OWASP ZAP en {self.base_url}") from None
         if r.status_code in (401, 403):
             raise ZapError("OWASP ZAP rechazó la clave de API (revisa ZAP_API_KEY)")
         if r.status_code >= 400:
@@ -72,7 +71,7 @@ class ZapClient:
         try:
             return r.json()
         except ValueError:
-            raise ZapError("Respuesta inesperada de OWASP ZAP")
+            raise ZapError("Respuesta inesperada de OWASP ZAP") from None
 
     def version(self) -> str:
         return str(self._get("/JSON/core/view/version/").get("version", "desconocida"))
@@ -107,7 +106,7 @@ class ZapClient:
             try:
                 return int(estado) >= 100
             except (TypeError, ValueError):
-                raise ZapError(f"Estado inesperado de ZAP ({componente}): {estado!r}")
+                raise ZapError(f"Estado inesperado de ZAP ({componente}): {estado!r}") from None
 
         self._esperar(terminado, limite, que)
 

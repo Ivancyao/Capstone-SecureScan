@@ -1,10 +1,8 @@
-"""
-Migración ligera: agrega las columnas nuevas a tablas que ya existen.
+"""Migración simple: agrega las columnas nuevas a tablas que ya existen.
 
-`Base.metadata.create_all` crea tablas que faltan, pero NO agrega columnas a una tabla
-existente. Para que quien ya tenga datos no pierda su base, este módulo revisa cada columna
-declarada en los modelos y, si falta en la base real, la agrega con ALTER TABLE.
-Es suficiente para este MVP; a futuro se puede reemplazar por Alembic.
+`Base.metadata.create_all` crea las tablas que faltan, pero no agrega columnas a una tabla existente.
+Este módulo compara las columnas de los modelos con las de la base y, si falta alguna, la agrega con
+ALTER TABLE. Alcanza para este proyecto; a futuro se puede cambiar por Alembic.
 """
 from sqlalchemy import inspect, text
 

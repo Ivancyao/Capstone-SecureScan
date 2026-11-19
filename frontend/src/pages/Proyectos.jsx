@@ -13,7 +13,6 @@ export function Proyectos() {
   useTitulo("Proyectos");
   const { data } = useData();
   const { user } = useAuth();
-  const nav = useNavigate();
   const [params, setParams] = useSearchParams();
   const [modal, setModal] = useState(params.get("nuevo") === "1");
   const duenos = Object.fromEntries((data.usuarios || []).map((u) => [u.id, u.nombre]));

@@ -27,8 +27,7 @@ def registrar(nombre="Ivan", email="ivan@test.cl", password="Password123"):
 
 
 def login(email="ivan@test.cl", password="Password123"):
-    r = client.post("/auth/login", data={"username": email, "password": password})
-    return r
+    return client.post("/auth/login", data={"username": email, "password": password})
 
 
 def auth_header(email="ivan@test.cl", password="Password123"):

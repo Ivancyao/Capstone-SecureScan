@@ -1,12 +1,10 @@
-"""
-Motor de riesgo: traduce un puerto/servicio abierto a un hallazgo de negocio.
+"""Motor de riesgo: convierte un puerto o servicio abierto en un hallazgo.
 
-IMPORTANTE (honestidad técnica): el puntaje CVSS que asigna este motor es una ESTIMACIÓN
-basada en reglas según el tipo de servicio expuesto. No es un cálculo vectorial completo
-de CVSS (que requiere vector de ataque, complejidad, impacto, etc.). Para el MVP sirve para
-priorizar; una mejora futura es calcular el vector CVSS v3.1 completo.
+Ojo: el puntaje CVSS de este módulo es una estimación según el tipo de servicio expuesto, no un
+cálculo completo del vector CVSS. Sirve para priorizar. Como mejora futura queda calcular el
+vector CVSS v3.1 completo (o usar los valores de la base NVD).
 
-La severidad se deriva del puntaje con las bandas oficiales de CVSS v3.1:
+La severidad sale del puntaje con las bandas de CVSS v3.1:
   0.0 Informativa | 0.1-3.9 Baja | 4.0-6.9 Media | 7.0-8.9 Alta | 9.0-10.0 Crítica
 """
 from typing import Dict

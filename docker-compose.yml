@@ -17,7 +17,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-securescan}:${POSTGRES_PASSWORD:-securescan}@db:5432/${POSTGRES_DB:-securescan}
-      SECRET_KEY: ${SECRET_KEY:-cambia-esta-clave-en-produccion}
+      SECRET_KEY: ${SECRET_KEY:-}
       CORS_ORIGINS: http://localhost:5173
       REPORTS_DIR: /code/reportes_generados
       # Candado del servidor: con "false", ninguna configuración web puede habilitar escaneos a IP públicas.

@@ -1,26 +1,25 @@
-"""
-Motor de escaneo: ejecuta Nmap sobre un objetivo y devuelve los puertos abiertos.
+"""Motor de escaneo: ejecuta Nmap sobre un objetivo y devuelve los puertos abiertos.
 
-Decisiones de diseño (útiles para la defensa oral):
-1. Solo se escanean objetivos de red privada/loopback (laboratorio) salvo que se active
-   explícitamente ALLOW_PUBLIC_SCANS=true. Así la plataforma no puede usarse por error
-   (o por mal uso) contra sistemas de terceros. Es el "ambiente controlado y autorizado".
-2. Se resuelve el nombre a IP UNA vez, se valida esa IP y se escanea ESA IP. Así se evita
-   que un DNS malicioso cambie de respuesta entre la validación y el escaneo.
-3. Nmap se invoca con una lista de argumentos (sin shell), por lo que no hay inyección
-   de comandos. La IP pasa por el módulo ipaddress antes de llegar al comando.
-4. Escaneo TCP connect (-sT): no requiere privilegios de administrador.
+Decisiones de diseño:
+1. Solo se escanean redes privadas o loopback (laboratorio), salvo que se active ALLOW_PUBLIC_SCANS=true.
+   Así no se puede escanear por error un sistema de terceros.
+2. El nombre se resuelve a IP una sola vez, se valida y se escanea esa misma IP. Así un DNS
+   no puede cambiar la respuesta entre la validación y el escaneo.
+3. Nmap se llama con una lista de argumentos (sin shell) y la IP pasa antes por el módulo ipaddress.
+4. Se usa escaneo TCP connect (-sT) porque no pide permisos de administrador.
 """
 import ipaddress
 import os
 import re
 import signal
 import socket
-import subprocess
+import subprocess  # nosec B404
 import time
-import xml.etree.ElementTree as ET
 from typing import Callable, Dict, List, Optional
 from urllib.parse import urlparse
+
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as ET  # la salida de Nmap incluye texto del objetivo: se parsea sin entidades externas
 
 # Puertos bien conocidos (1-1024) + puertos típicos de desarrollo y bases de datos.
 DEFAULT_PORTS = (
@@ -44,17 +43,15 @@ def extraer_host(url_objetivo: str) -> str:
 
 
 def resolver_y_validar(host: str, permitir_publicos: Optional[bool] = None) -> str:
-    """
-    Resuelve el host a una IP y verifica que sea un objetivo permitido.
+    """Resuelve el host a una IP y revisa que sea un objetivo permitido.
 
-    `permitir_publicos` viene de la configuración de la plataforma, pero la variable de
-    entorno ALLOW_PUBLIC_SCANS es siempre un candado superior: si vale "false", ninguna
-    configuración puede habilitar direcciones públicas.
+    `permitir_publicos` viene de la configuración, pero la variable ALLOW_PUBLIC_SCANS manda sobre ella:
+    si vale "false", la configuración no puede habilitar direcciones públicas.
     """
     try:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except socket.gaierror:
-        raise ScanError(f"No se pudo resolver el host '{host}'")
+        raise ScanError(f"No se pudo resolver el host '{host}'") from None
 
     candado_servidor = os.getenv("ALLOW_PUBLIC_SCANS", "false").lower() == "true"
     permitir_publicos = candado_servidor and (True if permitir_publicos is None else permitir_publicos)
@@ -75,8 +72,8 @@ def parsear_xml_nmap(xml_texto: str) -> List[Dict]:
     """Convierte la salida XML de Nmap en una lista de puertos abiertos."""
     try:
         root = ET.fromstring(xml_texto)
-    except ET.ParseError:
-        raise ScanError("No se pudo interpretar la salida de Nmap")
+    except (ET.ParseError, DefusedXmlException):
+        raise ScanError("No se pudo interpretar la salida de Nmap") from None
 
     resultados = []
     for port in root.findall("./host/ports/port"):
@@ -125,10 +122,9 @@ def escanear_puertos(
     versiones: bool = True,
     cancelar: Optional[Callable[[], bool]] = None,
 ) -> List[Dict]:
-    """
-    Ejecuta Nmap (-sT, y -sV si `versiones`) sobre una IP ya validada y devuelve los puertos abiertos.
+    """Ejecuta Nmap (-sT, y -sV si `versiones`) sobre una IP ya validada y devuelve los puertos abiertos.
 
-    Si se entrega `cancelar`, se consulta cada segundo y, si devuelve True, se termina el proceso
+    Si se entrega `cancelar`, se revisa cada segundo y, si devuelve True, se termina el proceso
     de Nmap y se lanza EvaluacionCancelada.
     """
     ipaddress.ip_address(ip)  # lanza ValueError si no es una IP válida (defensa extra)
@@ -137,21 +133,23 @@ def escanear_puertos(
     comando += argumentos_de_puertos(perfil, puertos) + ["-oX", "-", ip]
     if cancelar is None:
         try:
-            proceso = subprocess.run(
+            proceso = subprocess.run(  # nosec B603
                 comando, capture_output=True, text=True, timeout=timeout, check=False
             )
         except FileNotFoundError:
-            raise ScanError("Nmap no está instalado en el servidor")
+            raise ScanError("Nmap no está instalado en el servidor") from None
         except subprocess.TimeoutExpired:
-            raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)")
+            raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)") from None
         codigo, salida, errores = proceso.returncode, proceso.stdout, proceso.stderr
     else:
         from app.cancelacion import EvaluacionCancelada
 
         try:
-            proceso = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+            proceso = subprocess.Popen(  # nosec B603
+                comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True
+            )
         except FileNotFoundError:
-            raise ScanError("Nmap no está instalado en el servidor")
+            raise ScanError("Nmap no está instalado en el servidor") from None
         inicio = time.monotonic()
         while True:
             try:
@@ -161,11 +159,11 @@ def escanear_puertos(
                 if cancelar():
                     _matar(proceso)
                     proceso.communicate()
-                    raise EvaluacionCancelada()
+                    raise EvaluacionCancelada() from None
                 if time.monotonic() - inicio > timeout:
                     _matar(proceso)
                     proceso.communicate()
-                    raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)")
+                    raise ScanError(f"El escaneo superó el tiempo máximo ({timeout}s)") from None
         codigo = proceso.returncode
 
     if codigo != 0:

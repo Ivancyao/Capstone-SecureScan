@@ -1,15 +1,12 @@
-"""
-Orquestación de una evaluación: escaneo -> clasificación de riesgo -> persistencia.
+"""Evaluación completa: escaneo -> clasificación de riesgo -> guardado en la base.
 
-Se ejecuta en segundo plano (FastAPI BackgroundTasks) con su PROPIA sesión de BD,
-porque la sesión de la petición HTTP ya se cerró cuando esta tarea corre.
-Así el usuario recibe respuesta inmediata y consulta el estado después.
+Corre en segundo plano (BackgroundTasks de FastAPI) con su propia sesión de BD, porque la sesión
+de la petición ya se cerró cuando esta tarea se ejecuta. Así el usuario recibe respuesta de inmediato
+y después consulta el estado.
 
-Mientras corre, la evaluación guarda `progreso` (0-100) y `etapa`, para que la web
-muestre el avance en vivo. Nmap es un único proceso, así que el avance es por etapas
-(no hay porcentaje fino dentro del escaneo de puertos).
+Mientras corre se guardan `progreso` (0-100) y `etapa` para mostrar el avance en la web. El avance es
+por etapas, no hay porcentaje dentro del escaneo de puertos.
 """
-from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -17,15 +14,14 @@ from app import config_service, risk, scanner, zap_client
 from app.cancelacion import ETAPA_CANCELADA, EvaluacionCancelada
 from app.database import SessionLocal
 from app.models import EstadoEvaluacion, Evaluacion, Hallazgo
+from app.tiempo import ahora_utc
 
 
 def url_para_zap(url_objetivo: str, ip: str, puertos: List[Dict]) -> Optional[str]:
-    """
-    Dirección web que se le entrega a ZAP, o None si el objetivo no es una aplicación web.
+    """Dirección web que se le pasa a ZAP, o None si el objetivo no es una aplicación web.
 
-    Se usa la IP YA VALIDADA (no el nombre) para que ZAP analice exactamente lo que se autorizó,
-    igual que con Nmap. Limitación: una aplicación que depende del nombre de host (hosts virtuales)
-    puede no responder por IP.
+    Se usa la IP ya validada (no el nombre) para que ZAP analice lo mismo que se autorizó, igual que Nmap.
+    Limitación: si la aplicación depende del nombre de host (hosts virtuales), puede no responder por IP.
     """
     texto = url_objetivo.strip()
     p = urlparse(texto if "://" in texto else f"//{texto}")
@@ -135,7 +131,7 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
             evaluacion.detalle_error = f"Error inesperado: {type(exc).__name__}"
             evaluacion.etapa = "Falló"
 
-        evaluacion.finalizada_en = datetime.utcnow()
+        evaluacion.finalizada_en = ahora_utc()
         db.commit()
         config_service.aplicar_retencion(db)
     finally:

@@ -1,10 +1,9 @@
-"""
-Proyectos, Activos y Evaluaciones.
+"""Proyectos, activos y evaluaciones.
 
-Control de acceso (previene "Broken Access Control", OWASP A01):
-cada usuario solo puede ver/modificar sus propios proyectos. El ADMIN puede ver todos.
+Control de acceso (Broken Access Control, OWASP A01): cada usuario solo ve y modifica sus propios
+proyectos. El ADMIN puede ver todos.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
@@ -26,6 +25,7 @@ from app.schemas import (
 from app.cancelacion import ETAPA_CANCELADA
 from app.scan_service import ejecutar_evaluacion
 from app.security import get_current_user
+from app.tiempo import ahora_utc
 
 router = APIRouter(tags=["Proyectos, Activos y Evaluaciones"])
 
@@ -46,6 +46,14 @@ def _get_activo_or_404(db: Session, activo_id: str, user: Usuario) -> Activo:
         raise HTTPException(status_code=404, detail="Activo no encontrado")
     _get_proyecto_or_404(db, activo.proyecto_id, user)  # reutiliza la verificación de propiedad
     return activo
+
+
+def _get_evaluacion_or_404(db: Session, evaluacion_id: str, user: Usuario) -> Evaluacion:
+    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
+    if not evaluacion:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+    _get_activo_or_404(db, evaluacion.activo_id, user)  # misma verificación de propiedad
+    return evaluacion
 
 
 # ---------------- Proyectos ----------------
@@ -144,7 +152,7 @@ def iniciar_evaluacion(
     # Una sola evaluación a la vez por activo. Las que quedaron "colgadas" (más antiguas que
     # el tiempo máximo de escaneo) no cuentan, para que un fallo no bloquee el activo para siempre.
     timeout = config_service.obtener(db)["motores"]["nmap"]["timeout_s"]
-    limite = datetime.utcnow() - timedelta(seconds=timeout + 120)
+    limite = ahora_utc() - timedelta(seconds=timeout + 120)
     en_curso = (
         db.query(Evaluacion)
         .filter(
@@ -233,10 +241,7 @@ def obtener_evaluacion(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
-    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
-    if not evaluacion:
-        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
-    _get_activo_or_404(db, evaluacion.activo_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
     return evaluacion
 
 
@@ -250,16 +255,13 @@ def cancelar_evaluacion(
     Cancela una evaluación pendiente o en curso. Queda registrada como fallida con la etapa
     "Cancelada"; el proceso de fondo detiene Nmap/ZAP y descarta los resultados parciales.
     """
-    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
-    if not evaluacion:
-        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
-    _get_activo_or_404(db, evaluacion.activo_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
     if evaluacion.estado not in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
         raise HTTPException(status_code=409, detail="La evaluación ya terminó; no hay nada que cancelar.")
     evaluacion.estado = EstadoEvaluacion.FALLIDA
     evaluacion.etapa = ETAPA_CANCELADA
     evaluacion.detalle_error = "Cancelada por el usuario."
-    evaluacion.finalizada_en = datetime.utcnow()
+    evaluacion.finalizada_en = ahora_utc()
     db.commit()
     db.refresh(evaluacion)
     return evaluacion
@@ -272,10 +274,7 @@ def eliminar_evaluacion(
     user: Usuario = Depends(get_current_user),
 ):
     """Elimina una evaluación y sus hallazgos. Si está en curso hay que cancelarla primero."""
-    evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
-    if not evaluacion:
-        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
-    _get_activo_or_404(db, evaluacion.activo_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
     if evaluacion.estado in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
         raise HTTPException(status_code=409, detail="La evaluación está en curso: cancélala antes de eliminarla.")
     db.delete(evaluacion)  # los hallazgos se eliminan en cascada

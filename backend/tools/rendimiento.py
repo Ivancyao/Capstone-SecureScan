@@ -14,7 +14,7 @@ import random
 import statistics
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,6 +27,7 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Activo, Evaluacion, Hallazgo, Proyecto, Usuario  # noqa: E402
 from app.security import hash_password  # noqa: E402
+from app.tiempo import ahora_utc  # noqa: E402
 
 ESCALAS = [  # (nombre, proyectos, activos por proyecto, evaluaciones por activo)
     ("pequeña", 3, 3, 4),
@@ -52,13 +53,13 @@ def sembrar(proyectos, activos_por, evals_por):
     ps, acts, evs, hs = [], [], [], []
     for i in range(proyectos):
         pid = str(uuid.uuid4())
-        ps.append(dict(id=pid, nombre=f"Proyecto {i}", propietario_id=admin.id, creado_en=datetime.utcnow()))
+        ps.append(dict(id=pid, nombre=f"Proyecto {i}", propietario_id=admin.id, creado_en=ahora_utc()))
         for j in range(activos_por):
             aid = str(uuid.uuid4())
-            acts.append(dict(id=aid, proyecto_id=pid, nombre=f"Activo {i}-{j}", url_objetivo="http://10.0.0.5", creado_en=datetime.utcnow()))
+            acts.append(dict(id=aid, proyecto_id=pid, nombre=f"Activo {i}-{j}", url_objetivo="http://10.0.0.5", creado_en=ahora_utc()))
             for k in range(evals_por):
                 eid = str(uuid.uuid4())
-                ini = datetime.utcnow() - timedelta(days=rnd.randint(0, 120), hours=rnd.randint(0, 23))
+                ini = ahora_utc() - timedelta(days=rnd.randint(0, 120), hours=rnd.randint(0, 23))
                 evs.append(dict(id=eid, activo_id=aid, estado="completada", iniciada_en=ini, finalizada_en=ini + timedelta(seconds=30), progreso=100, etapa="Completada"))
                 for _ in range(rnd.randint(1, 8)):
                     sev = rnd.choices(SEV, PESOS)[0]
@@ -90,7 +91,7 @@ def medir(cabecera, metodo, ruta, **kw):
 
 def main():
     motor = engine.dialect.name
-    lineas = [f"# Resultados de rendimiento\n", f"Motor de base de datos: **{motor}** · {REPETICIONES} repeticiones por medición · tiempos en milisegundos (incluye la pila completa de la API, sin red).\n"]
+    lineas = ["# Resultados de rendimiento\n", f"Motor de base de datos: **{motor}** · {REPETICIONES} repeticiones por medición · tiempos en milisegundos (incluye la pila completa de la API, sin red).\n"]
     for nombre, p, a, e in ESCALAS:
         cuentas, una_eval, un_proy = sembrar(p, a, e)
         t = time.perf_counter()
@@ -109,7 +110,6 @@ def main():
             med, p95, mx, tam = medir(cab, metodo, ruta, **kw)
             lineas.append(f"| {metodo} {ruta if 'evaluaciones/' not in ruta else '/evaluaciones/{id}'} | {med:.1f} | {p95:.1f} | {mx:.1f} | {tam/1024:.0f} KB |")
         # Reporte PDF con las 10 evaluaciones más recientes del primer proyecto
-        evs = [x["id"] for x in client.get("/evaluaciones", headers=cab).json() if True][:10]
         db = SessionLocal()
         ids_ok = [ev.id for ev in db.query(Evaluacion).join(Activo).filter(Activo.proyecto_id == un_proy).limit(10).all()]
         db.close()

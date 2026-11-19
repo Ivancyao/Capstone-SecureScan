@@ -2,13 +2,22 @@ const fecha = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short",
 const fechaHora = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 const corta = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short" });
 
-export const fmtFecha = (iso) => (iso ? fecha.format(new Date(iso)) : "—");
-export const fmtFechaHora = (iso) => (iso ? fechaHora.format(new Date(iso)) : "—");
-export const fmtFechaCorta = (iso) => (iso ? corta.format(new Date(iso)) : "—");
+// El servidor guarda las fechas en UTC y las envía sin zona horaria ("2026-11-13T12:51:00").
+// Sin esta función, el navegador las leería como hora local y mostraría 3 horas de más en Chile.
+// Si el texto ya trae zona ("Z" o "+00:00"), se respeta tal cual.
+export const aFecha = (iso) => {
+  if (iso instanceof Date) return iso;
+  const t = String(iso);
+  return new Date(/(Z|[+-]\d{2}:?\d{2})$/i.test(t) || !t.includes("T") ? t : t + "Z");
+};
+
+export const fmtFecha = (iso) => (iso ? fecha.format(aFecha(iso)) : "—");
+export const fmtFechaHora = (iso) => (iso ? fechaHora.format(aFecha(iso)) : "—");
+export const fmtFechaCorta = (iso) => (iso ? corta.format(aFecha(iso)) : "—");
 
 export function hace(iso) {
   if (!iso) return "—";
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  const s = Math.max(0, (Date.now() - aFecha(iso).getTime()) / 1000);
   if (s < 60) return "hace un momento";
   const m = Math.floor(s / 60);
   if (m < 60) return `hace ${m} min`;
@@ -22,7 +31,7 @@ export function hace(iso) {
 
 export function fmtDuracion(inicio, fin) {
   if (!inicio || !fin) return "—";
-  const s = Math.round((new Date(fin) - new Date(inicio)) / 1000);
+  const s = Math.round((aFecha(fin) - aFecha(inicio)) / 1000);
   if (s < 60) return `${s} s`;
   return `${Math.floor(s / 60)} min ${s % 60} s`;
 }

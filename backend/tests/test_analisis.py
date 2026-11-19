@@ -151,7 +151,7 @@ def test_sitio_publico_no_se_contacta_sin_los_dos_candados(monkeypatch):
 
 
 def test_cabeceras_de_un_sitio_permitido(monkeypatch):
-    h = login()
+    login()
     monkeypatch.setattr(svc.scanner, "resolver_y_validar", lambda host, permitir_publicos=False: "10.0.0.5")
 
     transporte = httpx.MockTransport(lambda req: httpx.Response(200, headers={"Server": "nginx/1.18.0", "Set-Cookie": "sid=1; Path=/"}, text="ok"))

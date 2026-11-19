@@ -20,17 +20,23 @@ Está dirigida a pymes y equipos de TI sin presupuesto para herramientas comerci
 ## Arquitectura
 Frontend (React) → API REST (FastAPI + JWT/RBAC) → Motor de Escaneo / Riesgo / Reportes → PostgreSQL.
 
-![Arquitectura de SecureScan](docs/diagramas/01_arquitectura.png)
+![Arquitectura de SecureScan](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas/01_arquitectura.png)
 
-Más diagramas (componentes, ER, clases, secuencias, estados y despliegue) en [`docs/diagramas`](docs/diagramas).
+Más diagramas (componentes, ER, clases, secuencias, estados y despliegue) en [`diagramas`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas).
 
 Estructura del repositorio:
 ```
-backend/    API FastAPI (models, security, routers/, scanner, risk, scan_service, reportes_pdf, tests/)
-frontend/   Interfaz React: 19 pantallas (ver frontend/README.md)
-docs/       Documentación: diseño y diagramas (diseno.md), manual técnico (manual_tecnico.md), resultados de rendimiento
-            y entregables Word (docs/entregables: requerimientos, diseño, plan de pruebas, manual técnico, documento de inicio y cronograma)
-docker-compose.yml
+backend/    API FastAPI (models, security, routers/, scanner, risk, scan_service, analisis_service, reportes_pdf, tests/)
+frontend/   Interfaz React: 21 pantallas (ver frontend/README.md)
+docker-compose.yml, .env.example   Despliegue con Docker Compose y variables de entorno
+Fase1/      Entregables de la Fase 1 (Grupales e Individuales)
+Fase2/      Entregables de la Fase 2
+  Grupales/                   Guía 2.4 e Informe 2.6
+  Individuales/               Diario de reflexión
+  Evidencias Proyecto/
+    Evidencias de documentacion/    Documentos de requerimientos, diseño, plan de pruebas y manual técnico (Word),
+                                    diagramas UML y docs/ (diseno.md, manual_tecnico.md, resultados de rendimiento)
+    Evidencias de sistema aplicacion/   Capturas de la aplicación en funcionamiento
 ```
 
 ## Cómo ejecutar el proyecto
@@ -41,6 +47,26 @@ docker compose up --build
 ```
 - Frontend: http://localhost:5173
 - API + documentación interactiva: http://localhost:8000/docs
+
+### Variables de entorno (`.env`)
+Copia `.env.example` a `.env` y ajusta los valores. **El `.env` real nunca se sube a GitHub** (está en `.gitignore`).
+
+| Variable | Para qué sirve |
+|---|---|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciales de la base de datos PostgreSQL |
+| `SECRET_KEY` | Clave con la que el backend firma los tokens JWT. Usa una cadena larga y aleatoria. Si falta, el backend genera una temporal (las sesiones se cierran al reiniciar) |
+| `ZAP_API_KEY` | Clave compartida entre el backend y el contenedor de OWASP ZAP. ZAP no expone puertos fuera de Docker |
+| `ALLOW_PUBLIC_SCANS` | Primer candado para escanear IP públicas. Déjala en `false` salvo autorización escrita |
+| `LOGIN_MAX_INTENTOS`, `LOGIN_VENTANA_SEGUNDOS` | Opcionales. Intentos fallidos de inicio de sesión permitidos (5) y ventana de bloqueo en segundos (300) |
+| `VIRUSTOTAL_API_KEY` | Opcional. Activa la reputación de VirusTotal en el *Análisis rápido* |
+
+**Cómo activar VirusTotal (opcional):**
+1. Crea una cuenta gratuita en https://www.virustotal.com y copia tu *API key* desde tu perfil.
+2. Pégala en `.env` sin comillas ni espacios: `VIRUSTOTAL_API_KEY=tu_clave`.
+3. Ejecuta `docker compose up -d` para que el backend lea la nueva clave.
+4. En **Análisis rápido**, el aviso amarillo desaparece y el resultado muestra "0 de N motores". Sin clave, solo se muestran indicadores locales.
+
+La cuenta gratuita permite 4 consultas por minuto y 500 al día.
 
 ### Primer uso
 1. Abre http://localhost:5173 y crea una cuenta. **La primera cuenta queda como administradora**; las demás parten como *usuario*.
@@ -95,8 +121,8 @@ pytest
 
 ## Metodología
 Enfoque tradicional (cascada, opción 1 del instructivo de Capstone) para la planificación y la documentación, con desarrollo incremental:
-producto mínimo funcional primero y luego Nmap, ZAP, reportes y métricas. Los artefactos están en [`docs/entregables`](docs/entregables):
-documento de requerimientos, documento de diseño, plan de pruebas y evidencias, manual técnico, y documento de inicio con cronograma.
+producto mínimo funcional primero y luego Nmap, ZAP, reportes y métricas. Los artefactos están en [`Evidencias de documentacion`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion):
+documento de requerimientos, documento de diseño, plan de pruebas y evidencias, y manual técnico.
 Todo el avance queda registrado en commits de este repositorio.
 
 ## Estado del desarrollo
@@ -104,11 +130,11 @@ Todo el avance queda registrado en commits de este repositorio.
 - [x] Autenticación JWT + control de acceso por roles (RBAC)
 - [x] CRUD de proyectos, activos y evaluaciones con control de propiedad
 - [x] Dashboard base (login, proyectos, activos, iniciar evaluación)
-- [x] Pruebas funcionales y de seguridad (129 pruebas automáticas aprobadas, más 1 que usa Nmap real y se omite si no está instalado)
+- [x] Pruebas funcionales y de seguridad (138 pruebas automáticas aprobadas: 129 de la versión evaluada el 10-11-2026 y 9 de endurecimiento de seguridad posteriores; más 1 que usa Nmap real y se omite si no está instalado)
 - [x] Motor de escaneo Nmap en segundo plano + validación de objetivo
 - [x] Motor de riesgo por reglas (CVSS estimado / OWASP Top 10)
 - [x] Dashboard con hallazgos, resumen por severidad y actualización automática
-- [x] Interfaz completa de 19 pantallas conectada a la API real
+- [x] Interfaz completa de 21 pantallas conectada a la API real
 - [x] Reportes PDF generados en el servidor
 - [x] Gestión de usuarios y roles, perfil, configuración de escaneo
 - [x] Avance de la evaluación en vivo y marcado de hallazgos corregidos
@@ -117,8 +143,8 @@ Todo el avance queda registrado en commits de este repositorio.
 - [x] Consultas SQL de agregación en el servidor (`/metricas`), verificadas contra un cálculo independiente
 - [x] Pruebas de rendimiento (hallazgo y corrección de un problema N+1) y manual técnico
 - [x] Validación completa con `docker compose up` (PostgreSQL, ZAP real y Juice Shop) en un equipo con Windows y Docker Desktop
-- [x] Rendimiento medido también sobre PostgreSQL 16 (equivalente a SQLite; ver [`docs/rendimiento_postgresql.md`](docs/rendimiento_postgresql.md))
+- [x] Rendimiento medido también sobre PostgreSQL 16 (equivalente a SQLite; ver [`rendimiento_postgresql.md`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/docs/rendimiento_postgresql.md))
 - [x] Paginación de `GET /evaluaciones` (API y tabla de la interfaz)
 - [x] Comparación entre dos evaluaciones de un activo (qué cambió: nuevos, resueltos, persisten, cambiaron de severidad)
 - [x] Cancelar evaluaciones en curso (detiene Nmap y ZAP) y eliminar evaluaciones terminadas
-- [x] Análisis rápido de URL o archivo (huella SHA-256, indicadores locales, cabeceras de seguridad y VirusTotal opcional); VirusTotal aún sin probar contra el servicio real
+- [x] Análisis rápido de URL o archivo (huella SHA-256, indicadores locales, cabeceras de seguridad y VirusTotal opcional); VirusTotal verificado con el servicio real el 12-11-2026 (`https://example.com`: 0 de 93 motores lo marcan)

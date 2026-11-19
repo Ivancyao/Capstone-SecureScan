@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app import limitador
 from app.database import get_db
 from app.models import RolUsuario, Usuario
 from app.schemas import PasswordCambio, PerfilUpdate, Token, UsuarioCreate, UsuarioOut
@@ -35,11 +36,21 @@ def register(data: UsuarioCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # OAuth2PasswordRequestForm usa el campo "username"; aquí corresponde al email.
+    origen = request.client.host if request.client else "desconocido"
+    espera = limitador.segundos_de_espera(form.username, origen)
+    if espera:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiados intentos fallidos. Espera {espera} segundos antes de volver a intentarlo.",
+            headers={"Retry-After": str(espera)},
+        )
     user = db.query(Usuario).filter(Usuario.email == form.username).first()
     if not user or not verify_password(form.password, user.password_hash):
+        limitador.registrar_fallo(form.username, origen)
         raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    limitador.limpiar(form.username, origen)
     if not user.activo:
         raise HTTPException(status_code=403, detail="Esta cuenta está desactivada. Contacta a un administrador.")
     token = create_access_token(subject=user.id, rol=user.rol.value)
