@@ -54,7 +54,10 @@ Instala Nmap con el gestor de tu sistema (`apt install nmap`, `brew install nmap
 | Variable | Por defecto | Qué hace |
 |---|---|---|
 | `DATABASE_URL` | `postgresql://securescan:securescan@localhost:5432/securescan` | Conexión a la base. Acepta `sqlite:///...` |
-| `SECRET_KEY` | `cambia-esta-clave-en-produccion` | Firma de los tokens. **Cámbiala**: con la de ejemplo, cualquiera podría fabricar tokens válidos. Usa 32 caracteres o más. |
+| `SECRET_KEY` | `cambia-esta-clave-en-produccion` | Firma de los tokens. **Cámbiala**. Usa 32 caracteres o más. Si falta o queda el valor de ejemplo, el servidor genera una clave aleatoria al iniciar y las sesiones se cierran en cada reinicio. |
+| `LOGIN_MAX_INTENTOS` | `5` | Intentos fallidos de inicio de sesión permitidos por correo y origen antes de bloquear con error 429. |
+| `LOGIN_VENTANA_SEGUNDOS` | `300` | Ventana en segundos para contar los fallos; también dura el bloqueo. |
+| `APP_TZ` | `America/Santiago` | Zona horaria de las horas que aparecen en el PDF. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Duración de la sesión |
 | `CORS_ORIGINS` | `http://localhost:5173` | Orígenes del frontend permitidos, separados por coma |
 | `ALLOW_PUBLIC_SCANS` | `false` | Candado del servidor para escanear IP públicas. Con `false`, ninguna configuración web puede habilitarlas. |
@@ -135,7 +138,7 @@ Al arrancar, el backend agrega las columnas que falten (`app/migrar.py`); no hac
 ## 8. Pruebas
 
 ```bash
-cd backend && pytest                       # 130 pruebas (129 aprobadas); 1 se omite si no hay Nmap
+cd backend && pytest                       # 139 pruebas (138 aprobadas); 1 se omite si no hay Nmap
 DATABASE_URL=sqlite:///./rendimiento.db python tools/rendimiento.py
 ```
 
@@ -163,6 +166,8 @@ DATABASE_URL=sqlite:///./rendimiento.db python tools/rendimiento.py
 | "OWASP ZAP no está configurado" al activarlo | Falta `ZAP_URL` | Define la variable o levanta el servicio `zap` |
 | Evaluación fallida con "El servidor se reinició…" | El backend se reinició a mitad del escaneo | Vuelve a lanzarla |
 | "El servidor bloquea las direcciones públicas" al guardar | `ALLOW_PUBLIC_SCANS=false` | Solo cámbialo con autorización escrita del dueño del sistema |
+| El inicio de sesión responde 429 (demasiados intentos) | Hubo 5 intentos fallidos seguidos con ese correo desde ese origen | Espera el tiempo que indica el mensaje (hasta 5 minutos) e ingresa con la contraseña correcta |
+| Las sesiones se cierran cada vez que se reinicia el backend | `SECRET_KEY` no está definida y el servidor genera una clave nueva en cada inicio | Define `SECRET_KEY` en `.env` y ejecuta `docker compose up -d --build` |
 | El panel tarda con mucho historial | Muchas evaluaciones por activo | Ver `rendimiento_resultados.md`; la interfaz ya pide solo las 10 más recientes por activo |
 
 ## 10. Seguridad operativa

@@ -27,7 +27,7 @@ Este documento describe cómo está construida la plataforma: requisitos, modelo
 | RNF3 | Contraseñas protegidas | Hash bcrypt; nunca en texto plano; mínimo 8 caracteres. |
 | RNF4 | Entrada validada | Esquemas Pydantic en cada endpoint; listas cerradas para opciones del escáner. |
 | RNF5 | Rendimiento | Panel calculado con SQL (`GROUP BY`); listados con carga anticipada y ventana por activo (ver `rendimiento_resultados.md`). |
-| RNF6 | Mantenibilidad | 129 pruebas automáticas aprobadas (más 1 omitida); migración automática de columnas; configuración por variables de entorno. |
+| RNF6 | Mantenibilidad | 138 pruebas automáticas aprobadas (más 1 omitida); migración automática de columnas; configuración por variables de entorno. |
 | RNF7 | Despliegue reproducible | Docker Compose con base de datos, API, interfaz, ZAP y un objetivo de laboratorio. |
 
 ## 2. Arquitectura
@@ -250,11 +250,13 @@ sequenceDiagram
 | Riesgo (OWASP Top 10) | Medida |
 |---|---|
 | A01 Control de acceso | Filtro por propietario en cada consulta; 404 en lugar de 403; rutas de administración exigen rol; cuenta desactivada = token inútil. |
-| A02 Fallas criptográficas | bcrypt para contraseñas; JWT firmado con `SECRET_KEY`. |
+| A02 Fallas criptográficas | bcrypt para contraseñas; JWT firmado con `SECRET_KEY`. Si falta, el servidor genera una clave aleatoria al iniciar en vez de usar una conocida. |
 | A03 Inyección | SQLAlchemy con parámetros enlazados; Nmap se invoca con lista de argumentos (sin shell) y la IP pasa por `ipaddress`; los perfiles de puertos son una lista cerrada. |
 | A04 Diseño inseguro | El escáner no puede apuntar a internet por accidente: dos candados independientes. |
-| A05 Configuración | Secretos por variables de entorno; ZAP no publica puertos; escaneo activo de ZAP apagado por defecto. |
-| A07 Autenticación | Contraseña mínima de 8 caracteres; contraseñas temporales aleatorias; mensaje de error genérico en el login. |
+| A05 Configuración | Secretos por variables de entorno; ZAP no publica puertos; escaneo activo de ZAP apagado por defecto; cabeceras de seguridad en cada respuesta; el XML de Nmap se lee con `defusedxml` (rechaza entidades externas). |
+| A06 Componentes vulnerables | Dependencias fijadas y revisadas con `pip-audit` (sin vulnerabilidades conocidas el 18-11-2026). `npm audit` informa 2 avisos moderados en react-router 6; corregirlos exige pasar a la versión 7 (cambio mayor), por eso quedan como limitación. |
+| A07 Autenticación | Contraseña mínima de 8 caracteres; contraseñas temporales aleatorias; mensaje de error genérico en el login; 5 intentos fallidos en 5 minutos bloquean ese correo desde ese origen (429 con `Retry-After`). |
+| A10 SSRF | El análisis rápido de URL nunca contacta direcciones loopback, link-local ni `0.0.0.0`, y aplica las reglas de alcance del escáner. |
 
 ## 7. Decisiones que se tomaron y por qué
 

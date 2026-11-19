@@ -1,0 +1,16 @@
+SecureScan - actualización de documentos (18-11-2026)
+
+Qué trae:
+- 4 documentos Word (requerimientos, diseño, plan de pruebas, manual técnico) con la versión nueva:
+  138 pruebas aprobadas, endurecimiento de seguridad, variables LOGIN_* y APP_TZ, A06 y SSRF en el diseño.
+- Informe 2.6 con 138 pruebas, el endurecimiento y "once diagramas UML".
+- README.md con los enlaces a "Fase 2" corregidos (antes decían "Fase2" y las imágenes no se veían en GitHub).
+- docs/diseno.md y docs/manual_tecnico.md al día.
+- limpiar_repo.sh: borra los archivos sobrantes con git rm.
+
+Pasos:
+1. Copia la carpeta "Fase 2" y README.md de este paquete sobre tu repositorio (reemplaza los existentes).
+   NO copies limpiar_repo.sh ni este archivo dentro del repo.
+2. En la raíz de tu repo ejecuta:  bash RUTA/limpiar_repo.sh   y revisa el resultado de git status.
+3. git commit y git push (el script te muestra el comando).
+4. Revisa en GitHub que el README muestre la imagen de arquitectura.

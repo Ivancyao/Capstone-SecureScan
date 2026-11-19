@@ -20,17 +20,17 @@ Está dirigida a pymes y equipos de TI sin presupuesto para herramientas comerci
 ## Arquitectura
 Frontend (React) → API REST (FastAPI + JWT/RBAC) → Motor de Escaneo / Riesgo / Reportes → PostgreSQL.
 
-![Arquitectura de SecureScan](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas/01_arquitectura.png)
+![Arquitectura de SecureScan](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas/01_arquitectura.png)
 
-Más diagramas (componentes, ER, clases, secuencias, estados y despliegue) en [`diagramas`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas).
+Más diagramas (componentes, ER, clases, secuencias, estados y despliegue) en [`diagramas`](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentacion/diagramas).
 
 Estructura del repositorio:
 ```
 backend/    API FastAPI (models, security, routers/, scanner, risk, scan_service, analisis_service, reportes_pdf, tests/)
 frontend/   Interfaz React: 21 pantallas (ver frontend/README.md)
 docker-compose.yml, .env.example   Despliegue con Docker Compose y variables de entorno
-Fase1/      Entregables de la Fase 1 (Grupales e Individuales)
-Fase2/      Entregables de la Fase 2
+Fase 1/     Entregables de la Fase 1 (Grupales e Individuales)
+Fase 2/     Entregables de la Fase 2
   Grupales/                   Guía 2.4 e Informe 2.6
   Individuales/               Diario de reflexión
   Evidencias Proyecto/
@@ -121,7 +121,7 @@ pytest
 
 ## Metodología
 Enfoque tradicional (cascada, opción 1 del instructivo de Capstone) para la planificación y la documentación, con desarrollo incremental:
-producto mínimo funcional primero y luego Nmap, ZAP, reportes y métricas. Los artefactos están en [`Evidencias de documentacion`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion):
+producto mínimo funcional primero y luego Nmap, ZAP, reportes y métricas. Los artefactos están en [`Evidencias de documentacion`](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentacion):
 documento de requerimientos, documento de diseño, plan de pruebas y evidencias, y manual técnico.
 Todo el avance queda registrado en commits de este repositorio.
 
@@ -143,7 +143,7 @@ Todo el avance queda registrado en commits de este repositorio.
 - [x] Consultas SQL de agregación en el servidor (`/metricas`), verificadas contra un cálculo independiente
 - [x] Pruebas de rendimiento (hallazgo y corrección de un problema N+1) y manual técnico
 - [x] Validación completa con `docker compose up` (PostgreSQL, ZAP real y Juice Shop) en un equipo con Windows y Docker Desktop
-- [x] Rendimiento medido también sobre PostgreSQL 16 (equivalente a SQLite; ver [`rendimiento_postgresql.md`](Fase2/Evidencias%20Proyecto/Evidencias%20de%20documentacion/docs/rendimiento_postgresql.md))
+- [x] Rendimiento medido también sobre PostgreSQL 16 (equivalente a SQLite; ver [`rendimiento_postgresql.md`](Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentacion/docs/rendimiento_postgresql.md))
 - [x] Paginación de `GET /evaluaciones` (API y tabla de la interfaz)
 - [x] Comparación entre dos evaluaciones de un activo (qué cambió: nuevos, resueltos, persisten, cambiaron de severidad)
 - [x] Cancelar evaluaciones en curso (detiene Nmap y ZAP) y eliminar evaluaciones terminadas
