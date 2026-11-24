@@ -10,7 +10,7 @@ import { useTheme } from "../context/ThemeContext.jsx";
 const EJEMPLO = [
   [21, "ftp", "vsftpd", "2.3.4"], [22, "ssh", "OpenSSH", "7.4"], [23, "telnet"], [80, "http", "Apache httpd", "2.4.7"],
   [443, "https", "nginx", "1.24.0"], [445, "microsoft-ds", "Samba smbd"], [3306, "mysql", "MySQL", "5.5.62"], [3389, "ms-wbt-server"], [6379, "redis", "Redis"],
-].map(([puerto, servicio, producto = "", version = ""], i) => ({ ...hallazgoDesdePuerto({ puerto, servicio, producto, version }), id: `ej-${i}` }));
+].map(([puerto, servicio, producto = "", version = ""], indice) => ({ ...hallazgoDesdePuerto({ puerto, servicio, producto, version }), id: `ej-${indice}` }));
 
 const PASOS = [
   { t: "Registra un activo", d: "Indica la aplicación o servidor que quieres revisar. Debe ser tuyo o contar con autorización." },
@@ -77,8 +77,8 @@ export default function Landing() {
           </figcaption>
           <PortMapDemo hallazgos={EJEMPLO} />
           <ul className="leyenda">
-            {SEVERIDADES.map((s) => (
-              <li key={s}><SevMark sev={s} /> {SEV[s].label}</li>
+            {SEVERIDADES.map((severidad) => (
+              <li key={severidad}><SevMark sev={severidad} /> {SEV[severidad].label}</li>
             ))}
             <li><span className="dash-swatch" aria-hidden="true" /> Cerrado</li>
           </ul>
@@ -88,11 +88,11 @@ export default function Landing() {
       <section className="l-sec" id="como-funciona">
         <h2 className="l-h2">De un activo registrado a un informe, en cuatro pasos</h2>
         <ol className="l-pasos">
-          {PASOS.map((p, i) => (
-            <li key={p.t}>
-              <span className="l-paso-n" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
-              <h3 className="h-sub">{p.t}</h3>
-              <p className="small soft">{p.d}</p>
+          {PASOS.map((paso, indice) => (
+            <li key={paso.t}>
+              <span className="l-paso-n" aria-hidden="true">{String(indice + 1).padStart(2, "0")}</span>
+              <h3 className="h-sub">{paso.t}</h3>
+              <p className="small soft">{paso.d}</p>
             </li>
           ))}
         </ol>
@@ -112,11 +112,11 @@ export default function Landing() {
             <tr><th scope="col">Severidad</th><th scope="col">Puntaje</th><th scope="col">Qué hacer</th></tr>
           </thead>
           <tbody>
-            {SEVERIDADES.map((s) => (
-              <tr key={s}>
-                <td><span className={`badge sevbg-${s}`}><SevMark sev={s} />{SEV[s].label}</span></td>
-                <td className="num">{SEV[s].rango}</td>
-                <td>{SEV[s].accion}</td>
+            {SEVERIDADES.map((severidad) => (
+              <tr key={severidad}>
+                <td><span className={`badge sevbg-${severidad}`}><SevMark sev={severidad} />{SEV[severidad].label}</span></td>
+                <td className="num">{SEV[severidad].rango}</td>
+                <td>{SEV[severidad].accion}</td>
               </tr>
             ))}
           </tbody>
@@ -126,10 +126,10 @@ export default function Landing() {
       <section className="l-sec" id="alcance">
         <h2 className="l-h2">Pensado para entornos autorizados</h2>
         <dl className="l-principios">
-          {PRINCIPIOS.map((p) => (
-            <div key={p.t}>
-              <dt><Icon name={p.i} size={18} /> {p.t}</dt>
-              <dd className="soft">{p.d}</dd>
+          {PRINCIPIOS.map((principio) => (
+            <div key={principio.t}>
+              <dt><Icon name={principio.i} size={18} /> {principio.t}</dt>
+              <dd className="soft">{principio.d}</dd>
             </div>
           ))}
         </dl>

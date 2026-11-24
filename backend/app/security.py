@@ -27,58 +27,63 @@ if SECRET_KEY in _CLAVES_DE_EJEMPLO:
     logging.getLogger("uvicorn.error").warning(
         "SECRET_KEY no está definida en el .env: se usa una clave temporal y las sesiones se cerrarán al reiniciar."
     )
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+ALGORITMO_JWT = "HS256"
+MINUTOS_DE_VIGENCIA_DEL_TOKEN = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+esquema_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
-def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+def hashear_contrasena(contrasena: str) -> str:
+    return bcrypt.hashpw(contrasena.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def create_access_token(subject: str, rol: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": subject, "rol": rol, "exp": expire}
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+def verificar_contrasena(contrasena: str, hash_guardado: str) -> bool:
+    return bcrypt.checkpw(contrasena.encode("utf-8"), hash_guardado.encode("utf-8"))
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+# Se compara contra este hash cuando el correo no existe, para que el login tarde lo mismo
+# exista o no la cuenta (así no se puede averiguar qué correos están registrados midiendo el tiempo).
+HASH_FALSO = hashear_contrasena("contrasena-que-nadie-usa")
+
+
+def crear_token_de_acceso(usuario_id: str, rol: str) -> str:
+    vence_en = datetime.now(timezone.utc) + timedelta(minutes=MINUTOS_DE_VIGENCIA_DEL_TOKEN)
+    contenido = {"sub": usuario_id, "rol": rol, "exp": vence_en}
+    return jwt.encode(contenido, SECRET_KEY, algorithm=ALGORITMO_JWT)
+
+
+def obtener_usuario_actual(
+    token: str = Depends(esquema_oauth2), db: Session = Depends(get_db)
 ) -> Usuario:
-    credentials_error = HTTPException(
+    error_de_credenciales = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Credenciales inválidas o token expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_error
+        contenido = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITMO_JWT])
+        usuario_id = contenido.get("sub")
+        if usuario_id is None:
+            raise error_de_credenciales
     except jwt.PyJWTError:
-        raise credentials_error from None
+        raise error_de_credenciales from None
 
-    user = db.query(Usuario).filter(Usuario.id == user_id).first()
-    if user is None or not user.activo:
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if usuario is None or not usuario.activo:
         # Una cuenta desactivada pierde el acceso de inmediato, aunque su token siga vigente.
-        raise credentials_error
-    return user
+        raise error_de_credenciales
+    return usuario
 
 
-def require_roles(*roles: RolUsuario):
+def exigir_roles(*roles_permitidos: RolUsuario):
     """Fábrica de dependencias RBAC: permite el acceso solo a los roles indicados."""
 
-    def checker(user: Usuario = Depends(get_current_user)) -> Usuario:
-        if user.rol not in roles:
+    def verificar_rol(usuario: Usuario = Depends(obtener_usuario_actual)) -> Usuario:
+        if usuario.rol not in roles_permitidos:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes permisos para realizar esta acción",
             )
-        return user
+        return usuario
 
-    return checker
+    return verificar_rol

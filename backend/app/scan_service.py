@@ -24,25 +24,25 @@ def url_para_zap(url_objetivo: str, ip: str, puertos: List[Dict]) -> Optional[st
     Limitación: si la aplicación depende del nombre de host (hosts virtuales), puede no responder por IP.
     """
     texto = url_objetivo.strip()
-    p = urlparse(texto if "://" in texto else f"//{texto}")
+    url_analizada = urlparse(texto if "://" in texto else f"//{texto}")
     host = f"[{ip}]" if ":" in ip else ip
     if "://" in texto:
-        if p.scheme not in ("http", "https"):
+        if url_analizada.scheme not in ("http", "https"):
             return None
-        puerto = f":{p.port}" if p.port else ""
-        return f"{p.scheme}://{host}{puerto}{p.path or '/'}"
-    web = [x for x in puertos if x["servicio"].lower().startswith("http") or "ssl" in x["servicio"].lower()]
+        puerto = f":{url_analizada.port}" if url_analizada.port else ""
+        return f"{url_analizada.scheme}://{host}{puerto}{url_analizada.path or '/'}"
+    web = [puerto_web for puerto_web in puertos if puerto_web["servicio"].lower().startswith("http") or "ssl" in puerto_web["servicio"].lower()]
     if not web:
         return None
-    elegido = next((x for x in web if "https" in x["servicio"].lower() or "ssl" in x["servicio"].lower()), web[0])
+    elegido = next((puerto_web for puerto_web in web if "https" in puerto_web["servicio"].lower() or "ssl" in puerto_web["servicio"].lower()), web[0])
     esquema = "https" if ("https" in elegido["servicio"].lower() or "ssl" in elegido["servicio"].lower()) else "http"
     return f"{esquema}://{host}:{elegido['puerto']}/"
 
 
 def esta_cancelada(evaluacion_id: str) -> bool:
     """True si el usuario canceló la evaluación o la eliminó. Usa una sesión propia para ver siempre el dato vigente."""
-    with SessionLocal() as s:
-        fila = s.query(Evaluacion.etapa).filter(Evaluacion.id == evaluacion_id).first()
+    with SessionLocal() as sesion:
+        fila = sesion.query(Evaluacion.etapa).filter(Evaluacion.id == evaluacion_id).first()
     return fila is None or fila[0] == ETAPA_CANCELADA
 
 
@@ -65,13 +65,13 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
         _avance(db, evaluacion, 5, "Validando el objetivo")
 
         try:
-            cfg = config_service.obtener(db)
-            nmap = cfg["motores"]["nmap"]
+            configuracion = config_service.obtener(db)
+            nmap = configuracion["motores"]["nmap"]
             if not nmap["activo"]:
                 raise scanner.ScanError("El motor Nmap está desactivado en la configuración de la plataforma")
 
             host = scanner.extraer_host(evaluacion.activo.url_objetivo)
-            ip = scanner.resolver_y_validar(host, permitir_publicos=config_service.publicas_efectivas(cfg))
+            ip = scanner.resolver_y_validar(host, permitir_publicos=config_service.publicas_efectivas(configuracion))
 
             _avance(db, evaluacion, 15, "Escaneando puertos y servicios")
             puertos = scanner.escanear_puertos(
@@ -82,7 +82,7 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
                 cancelar=cancelada,
             )
 
-            zap = cfg["motores"]["zap"]
+            zap = configuracion["motores"]["zap"]
             con_zap = zap["activo"] and zap_client.disponible()
             _avance(db, evaluacion, 40 if con_zap else 85, "Clasificando el riesgo")
             for puerto in puertos:
@@ -99,8 +99,8 @@ def ejecutar_evaluacion(evaluacion_id: str) -> None:
                     else:
                         cliente_zap = zap_client.ZapClient()
                         cliente_zap.cancelar = cancelada
-                        for h in cliente_zap.analizar(url_zap, zap["timeout_s"], zap["escaneo_activo"]):
-                            db.add(Hallazgo(evaluacion_id=evaluacion.id, **h))
+                        for hallazgo_zap in cliente_zap.analizar(url_zap, zap["timeout_s"], zap["escaneo_activo"]):
+                            db.add(Hallazgo(evaluacion_id=evaluacion.id, **hallazgo_zap))
                 except EvaluacionCancelada:
                     raise
                 except zap_client.ZapError as exc:

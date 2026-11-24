@@ -2,19 +2,19 @@
 // Un hallazgo se identifica por su nombre: "Puerto 3306/tcp abierto (mysql)" o "Falta la política de seguridad de contenido (CSP)".
 import { ordenSev } from "./risk.js";
 
-const clave = (h) => (h.nombre_vulnerabilidad || "").trim().toLowerCase();
+const clave = (hallazgo) => (hallazgo.nombre_vulnerabilidad || "").trim().toLowerCase();
 
 // Si una evaluación repite un nombre, se conserva el más severo.
 function indexar(evaluacion) {
-  const m = new Map();
-  (evaluacion?.hallazgos || []).forEach((h) => {
-    const previo = m.get(clave(h));
-    if (!previo || ordenSev(h.severidad) < ordenSev(previo.severidad)) m.set(clave(h), h);
+  const porClave = new Map();
+  (evaluacion?.hallazgos || []).forEach((hallazgo) => {
+    const previo = porClave.get(clave(hallazgo));
+    if (!previo || ordenSev(hallazgo.severidad) < ordenSev(previo.severidad)) porClave.set(clave(hallazgo), hallazgo);
   });
-  return m;
+  return porClave;
 }
 
-const porSeveridad = (a, b) => ordenSev(a.severidad) - ordenSev(b.severidad) || (b.cvss_score ?? 0) - (a.cvss_score ?? 0) || a.nombre_vulnerabilidad.localeCompare(b.nombre_vulnerabilidad);
+const porSeveridad = (primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0) || primero.nombre_vulnerabilidad.localeCompare(segundo.nombre_vulnerabilidad);
 
 /**
  * @param base    evaluación anterior (punto de partida)
@@ -23,29 +23,29 @@ const porSeveridad = (a, b) => ordenSev(a.severidad) - ordenSev(b.severidad) || 
  *          cambiaron (en ambas, distinta severidad: { antes, ahora, sube }) y el balance de hallazgos.
  */
 export function compararEvaluaciones(base, actual) {
-  const a = indexar(base);
-  const b = indexar(actual);
+  const porClaveBase = indexar(base);
+  const porClaveActual = indexar(actual);
   const nuevos = [];
   const resueltos = [];
   const persisten = [];
   const cambiaron = [];
-  b.forEach((h, k) => {
-    const antes = a.get(k);
-    if (!antes) nuevos.push(h);
-    else if (antes.severidad === h.severidad) persisten.push(h);
-    else cambiaron.push({ antes, ahora: h, sube: ordenSev(h.severidad) < ordenSev(antes.severidad) });
+  porClaveActual.forEach((hallazgo, claveHallazgo) => {
+    const antes = porClaveBase.get(claveHallazgo);
+    if (!antes) nuevos.push(hallazgo);
+    else if (antes.severidad === hallazgo.severidad) persisten.push(hallazgo);
+    else cambiaron.push({ antes, ahora: hallazgo, sube: ordenSev(hallazgo.severidad) < ordenSev(antes.severidad) });
   });
-  a.forEach((h, k) => {
-    if (!b.has(k)) resueltos.push(h);
+  porClaveBase.forEach((hallazgo, claveHallazgo) => {
+    if (!porClaveActual.has(claveHallazgo)) resueltos.push(hallazgo);
   });
   nuevos.sort(porSeveridad);
   resueltos.sort(porSeveridad);
   persisten.sort(porSeveridad);
-  cambiaron.sort((x, y) => porSeveridad(x.ahora, y.ahora));
-  const totalAntes = a.size;
-  const totalAhora = b.size;
-  const empeora = nuevos.length > 0 || cambiaron.some((c) => c.sube);
-  const mejora = resueltos.length > 0 || cambiaron.some((c) => !c.sube);
+  cambiaron.sort((primero, segundo) => porSeveridad(primero.ahora, segundo.ahora));
+  const totalAntes = porClaveBase.size;
+  const totalAhora = porClaveActual.size;
+  const empeora = nuevos.length > 0 || cambiaron.some((cambio) => cambio.sube);
+  const mejora = resueltos.length > 0 || cambiaron.some((cambio) => !cambio.sube);
   return {
     nuevos,
     resueltos,
@@ -61,7 +61,7 @@ export function compararEvaluaciones(base, actual) {
 // Evaluación completada inmediatamente anterior a la dada, del mismo activo.
 export function evaluacionAnterior(evaluaciones = [], actual) {
   const previas = evaluaciones
-    .filter((e) => e.activo_id === actual.activo_id && e.estado === "completada" && new Date(e.iniciada_en) < new Date(actual.iniciada_en))
-    .sort((x, y) => new Date(y.iniciada_en) - new Date(x.iniciada_en));
+    .filter((evaluacion) => evaluacion.activo_id === actual.activo_id && evaluacion.estado === "completada" && new Date(evaluacion.iniciada_en) < new Date(actual.iniciada_en))
+    .sort((primero, segundo) => new Date(segundo.iniciada_en) - new Date(primero.iniciada_en));
   return previas[0] || null;
 }

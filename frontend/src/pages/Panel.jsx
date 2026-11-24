@@ -14,7 +14,7 @@ export default function Panel_() {
   useTitulo("Panel");
   const { user } = useAuth();
   const { data } = useData();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const [modal, setModal] = useState(false);
   const nombre = user?.nombre?.split(" ")[0] || "";
 
@@ -37,7 +37,7 @@ export default function Panel_() {
 
   const { conteoGlobal, activosAtencion, enCurso, evaluaciones, porOwasp, semanas } = data;
   const masExpuesto = activosAtencion[0];
-  const evaluados = data.activos.filter((a) => a.ultimaOk).length;
+  const evaluados = data.activos.filter((activo) => activo.ultimaOk).length;
 
   return (
     <>
@@ -55,14 +55,14 @@ export default function Panel_() {
 
       {enCurso.length > 0 && (
         <div className="stack-sm panel-gap">
-          {enCurso.map((e) => (
-            <Link key={e.id} to={`/evaluaciones/${e.id}`} className="encurso">
+          {enCurso.map((evaluacion) => (
+            <Link key={evaluacion.id} to={`/evaluaciones/${evaluacion.id}`} className="encurso">
               <span className="estado estado-en_progreso"><i aria-hidden="true" /></span>
               <span className="grow">
-                <strong>Evaluando {e.activo?.nombre}</strong>
-                <span className="small muted"> · {e.etapa || "En cola"}</span>
+                <strong>Evaluando {evaluacion.activo?.nombre}</strong>
+                <span className="small muted"> · {evaluacion.etapa || "En cola"}</span>
               </span>
-              <span className="encurso-bar"><Progress valor={e.progreso || 0} indeterminado={e.progreso == null} /></span>
+              <span className="encurso-bar"><Progress valor={evaluacion.progreso || 0} indeterminado={evaluacion.progreso == null} /></span>
               <Icon name="chevron-right" size={16} />
             </Link>
           ))}
@@ -85,7 +85,7 @@ export default function Panel_() {
         >
           {masExpuesto ? (
             <div className="stack-sm">
-              <PortMap hallazgos={masExpuesto.ultimaOk.hallazgos} alSeleccionar={(h) => nav(`/hallazgos/${h.id}`)} />
+              <PortMap hallazgos={masExpuesto.ultimaOk.hallazgos} alSeleccionar={(hallazgo) => navegar(`/hallazgos/${hallazgo.id}`)} />
               <LeyendaSev />
             </div>
           ) : (
@@ -109,8 +109,8 @@ export default function Panel_() {
             descripcion="Suma de las evaluaciones completadas cada semana"
             leyenda={<LeyendaSev />}
             tabla={{
-              columnas: ["Semana", ...SEVERIDADES.map((s) => s[0].toUpperCase() + s.slice(1)), "Total"],
-              filas: semanas.map((s) => [s.inicio.toLocaleDateString("es-CL", { day: "numeric", month: "short" }), ...SEVERIDADES.map((k) => s[k]), s.total]),
+              columnas: ["Semana", ...SEVERIDADES.map((severidad) => severidad[0].toUpperCase() + severidad.slice(1)), "Total"],
+              filas: semanas.map((semana) => [semana.inicio.toLocaleDateString("es-CL", { day: "numeric", month: "short" }), ...SEVERIDADES.map((severidad) => semana[severidad]), semana.total]),
             }}
           >
             <WeeklyColumns semanas={semanas} />
@@ -120,9 +120,9 @@ export default function Panel_() {
           <ChartFrame
             titulo="Categorías OWASP Top 10"
             descripcion="Hallazgos abiertos agrupados por categoría"
-            tabla={{ columnas: ["Categoría", "Hallazgos"], filas: porOwasp.map((o) => [`${o.codigo} ${o.nombre}`, o.n]) }}
+            tabla={{ columnas: ["Categoría", "Hallazgos"], filas: porOwasp.map((categoria) => [`${categoria.codigo} ${categoria.nombre}`, categoria.n]) }}
           >
-            <HBars filas={porOwasp.slice(0, 6).map((o) => ({ ...o, etiqueta: `${o.codigo} ${o.nombre}`, valor: o.n }))} vacio="Sin hallazgos abiertos." />
+            <HBars filas={porOwasp.slice(0, 6).map((categoria) => ({ ...categoria, etiqueta: `${categoria.codigo} ${categoria.nombre}`, valor: categoria.n }))} vacio="Sin hallazgos abiertos." />
           </ChartFrame>
         </Panel>
       </div>
@@ -137,20 +137,20 @@ export default function Panel_() {
             <p className="small muted tabla-vacia">Todos los activos están al día.</p>
           ) : (
             <div className="cards cards-2">
-              {activosAtencion.slice(0, 4).map((a) => <TarjetaActivo key={a.id} activo={a} />)}
+              {activosAtencion.slice(0, 4).map((activo) => <TarjetaActivo key={activo.id} activo={activo} />)}
             </div>
           )}
         </div>
 
         <Panel className="panel-flat" titulo="Actividad reciente" flush acciones={<Link className="btn btn-quiet btn-sm" to="/evaluaciones">Ver todas</Link>}>
           <ul className="rows">
-            {evaluaciones.slice(0, 6).map((e) => (
-              <li key={e.id} className="clic" onClick={() => nav(`/evaluaciones/${e.id}`)}>
+            {evaluaciones.slice(0, 6).map((evaluacion) => (
+              <li key={evaluacion.id} className="clic" onClick={() => navegar(`/evaluaciones/${evaluacion.id}`)}>
                 <div className="grow">
-                  <Link to={`/evaluaciones/${e.id}`} className="titulo" onClick={(ev) => ev.stopPropagation()}>{e.activo?.nombre}</Link>
-                  <span className="sub" title={fmtFechaHora(e.iniciada_en)}>{hace(e.iniciada_en)}</span>
+                  <Link to={`/evaluaciones/${evaluacion.id}`} className="titulo" onClick={(evento) => evento.stopPropagation()}>{evaluacion.activo?.nombre}</Link>
+                  <span className="sub" title={fmtFechaHora(evaluacion.iniciada_en)}>{hace(evaluacion.iniciada_en)}</span>
                 </div>
-                <EstadoBadge estado={e.estado} />
+                <EstadoBadge estado={evaluacion.estado} />
               </li>
             ))}
           </ul>

@@ -19,20 +19,20 @@ const PERMISOS = [
 
 function CrearUsuarioModal({ abierto, onClose }) {
   const { invitarUsuario } = useData();
-  const [f, setF] = useState({ nombre: "", email: "", rol: "usuario" });
+  const [formulario, setFormulario] = useState({ nombre: "", email: "", rol: "usuario" });
   const [cargando, setCargando] = useState(false);
   const [creada, setCreada] = useState(null); // cuenta recién creada, con su contraseña temporal
   const cerrar = () => {
     setCreada(null);
     onClose();
   };
-  const enviar = async (e) => {
-    e.preventDefault();
+  const enviar = async (evento) => {
+    evento.preventDefault();
     setCargando(true);
     try {
-      const r = await invitarUsuario(f);
-      setF({ nombre: "", email: "", rol: "usuario" });
-      if (r?.password_temporal) setCreada(r);
+      const respuesta = await invitarUsuario(formulario);
+      setFormulario({ nombre: "", email: "", rol: "usuario" });
+      if (respuesta?.password_temporal) setCreada(respuesta);
       else onClose();
     } catch {
       /* aviso mostrado */
@@ -76,12 +76,12 @@ function CrearUsuarioModal({ abierto, onClose }) {
       }
     >
       <form id="form-usuario" className="form-grid" onSubmit={enviar}>
-        <Campo etiqueta="Nombre completo">{(id) => <input id={id} className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} minLength={2} required />}</Campo>
-        <Campo etiqueta="Correo">{(id) => <input id={id} className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required />}</Campo>
+        <Campo etiqueta="Nombre completo">{(id) => <input id={id} className="input" value={formulario.nombre} onChange={(evento) => setFormulario({ ...formulario, nombre: evento.target.value })} minLength={2} required />}</Campo>
+        <Campo etiqueta="Correo">{(id) => <input id={id} className="input" type="email" value={formulario.email} onChange={(evento) => setFormulario({ ...formulario, email: evento.target.value })} required />}</Campo>
         <Campo etiqueta="Rol">
           {(id) => (
-            <select id={id} className="select" value={f.rol} onChange={(e) => setF({ ...f, rol: e.target.value })}>
-              {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <select id={id} className="select" value={formulario.rol} onChange={(evento) => setFormulario({ ...formulario, rol: evento.target.value })}>
+              {Object.entries(ROLES).map(([rol, nombreRol]) => <option key={rol} value={rol}>{nombreRol}</option>)}
             </select>
           )}
         </Campo>
@@ -111,31 +111,31 @@ export function Usuarios() {
           <table className="tabla">
             <thead><tr><th>Persona</th><th>Rol</th><th>Estado</th><th>Creada</th><th /></tr></thead>
             <tbody>
-              {data.usuarios.map((u) => {
-                const yo = u.id === user.id;
+              {data.usuarios.map((usuario) => {
+                const esMiCuenta = usuario.id === user.id;
                 return (
-                  <tr key={u.id}>
+                  <tr key={usuario.id}>
                     <td>
                       <div className="persona">
-                        <Avatar nombre={u.nombre} size={34} />
-                        <div className="celda-titulo"><span className="row-inline">{u.nombre} {yo && <Tag>Tú</Tag>}</span><span className="sub">{u.email}</span></div>
+                        <Avatar nombre={usuario.nombre} size={34} />
+                        <div className="celda-titulo"><span className="row-inline">{usuario.nombre} {esMiCuenta && <Tag>Tú</Tag>}</span><span className="sub">{usuario.email}</span></div>
                       </div>
                     </td>
                     <td>
-                      {yo ? (
-                        <RolBadge rol={u.rol} />
+                      {esMiCuenta ? (
+                        <RolBadge rol={usuario.rol} />
                       ) : (
-                        <select className="select select-inline" value={u.rol} onChange={(e) => cambiarRol(u.id, e.target.value).catch(() => {})} aria-label={`Rol de ${u.nombre}`}>
-                          {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        <select className="select select-inline" value={usuario.rol} onChange={(evento) => cambiarRol(usuario.id, evento.target.value).catch(() => {})} aria-label={`Rol de ${usuario.nombre}`}>
+                          {Object.entries(ROLES).map(([rol, nombreRol]) => <option key={rol} value={rol}>{nombreRol}</option>)}
                         </select>
                       )}
                     </td>
-                    <td>{u.activo === false ? <Tag tono="danger">Desactivada</Tag> : <Tag tono="ok">Activa</Tag>}</td>
-                    <td className="nowrap">{fmtFecha(u.creado_en)}</td>
+                    <td>{usuario.activo === false ? <Tag tono="danger">Desactivada</Tag> : <Tag tono="ok">Activa</Tag>}</td>
+                    <td className="nowrap">{fmtFecha(usuario.creado_en)}</td>
                     <td className="right">
-                      {!yo && (
-                        <button className="btn btn-sm" onClick={() => alternarUsuario(u.id, u.activo === false).catch(() => {})}>
-                          {u.activo === false ? "Reactivar" : "Desactivar"}
+                      {!esMiCuenta && (
+                        <button className="btn btn-sm" onClick={() => alternarUsuario(usuario.id, usuario.activo === false).catch(() => {})}>
+                          {usuario.activo === false ? "Reactivar" : "Desactivar"}
                         </button>
                       )}
                     </td>
@@ -152,11 +152,11 @@ export function Usuarios() {
           <table className="tabla tabla-compacta matriz">
             <thead><tr><th>Permiso</th><th className="centro">Administrador</th><th className="centro">Analista</th><th className="centro">Usuario</th></tr></thead>
             <tbody>
-              {PERMISOS.map(([t, ...v]) => (
-                <tr key={t}>
-                  <td>{t}</td>
-                  {v.map((ok, i) => (
-                    <td key={i} className="centro">
+              {PERMISOS.map(([permiso, ...rolesPermitidos]) => (
+                <tr key={permiso}>
+                  <td>{permiso}</td>
+                  {rolesPermitidos.map((ok, indice) => (
+                    <td key={indice} className="centro">
                       {ok ? <Icon name="check-circle" size={18} className="si" title="Permitido" /> : <span className="no" aria-label="No permitido">—</span>}
                     </td>
                   ))}
@@ -182,11 +182,11 @@ export function Configuracion() {
   useTitulo("Configuración");
   const { data, guardarConfig, restablecer } = useData();
   const toast = useToast();
-  const [cfg, setCfg] = useState(data.config);
+  const [configuracion, setConfiguracion] = useState(data.config);
   const [guardando, setGuardando] = useState(false);
-  useEffect(() => setCfg(data.config), [data.config]);
+  useEffect(() => setConfiguracion(data.config), [data.config]);
 
-  if (!cfg) {
+  if (!configuracion) {
     return (
       <SoloAdmin>
         <PageHeader titulo="Configuración" descripcion="Motores de escaneo y reglas de alcance." />
@@ -195,17 +195,17 @@ export function Configuracion() {
     );
   }
 
-  const sucio = JSON.stringify(cfg) !== JSON.stringify(data.config);
-  const servidorPermitePublicas = cfg.alcance.publicas_permitidas_por_servidor !== false; // en el modo de ejemplo no hay candado
-  const nmap = cfg.motores.nmap;
-  const zap = cfg.motores.zap;
-  const setZap = (k, v) => setCfg({ ...cfg, motores: { ...cfg.motores, zap: { ...zap, [k]: v } } });
-  const setNmap = (k, v) => setCfg({ ...cfg, motores: { ...cfg.motores, nmap: { ...nmap, [k]: v } } });
+  const sucio = JSON.stringify(configuracion) !== JSON.stringify(data.config);
+  const servidorPermitePublicas = configuracion.alcance.publicas_permitidas_por_servidor !== false; // en el modo de ejemplo no hay candado
+  const nmap = configuracion.motores.nmap;
+  const zap = configuracion.motores.zap;
+  const setZap = (clave, valor) => setConfiguracion({ ...configuracion, motores: { ...configuracion.motores, zap: { ...zap, [clave]: valor } } });
+  const setNmap = (clave, valor) => setConfiguracion({ ...configuracion, motores: { ...configuracion.motores, nmap: { ...nmap, [clave]: valor } } });
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      await guardarConfig(cfg);
+      await guardarConfig(configuracion);
     } catch {
       /* aviso mostrado */
     } finally {
@@ -220,7 +220,7 @@ export function Configuracion() {
         descripcion="Qué herramientas se usan para evaluar y a qué direcciones se les permite escanear."
         acciones={
           <>
-            <button className="btn" onClick={() => setCfg(data.config)} disabled={!sucio}>Descartar</button>
+            <button className="btn" onClick={() => setConfiguracion(data.config)} disabled={!sucio}>Descartar</button>
             <button className="btn btn-primary" onClick={guardar} disabled={!sucio || guardando}>{guardando ? "Guardando…" : "Guardar cambios"}</button>
           </>
         }
@@ -231,20 +231,20 @@ export function Configuracion() {
             <li>
               <div className="motor-cab">
                 <div><strong>Nmap</strong> <Tag tono="ok">Integrado</Tag><p className="small muted">Descubre puertos abiertos y detecta el servicio y la versión de cada uno.</p></div>
-                <label className="switch" aria-label="Activar Nmap"><input type="checkbox" checked={nmap.activo} onChange={(e) => setNmap("activo", e.target.checked)} /><i /></label>
+                <label className="switch" aria-label="Activar Nmap"><input type="checkbox" checked={nmap.activo} onChange={(evento) => setNmap("activo", evento.target.checked)} /><i /></label>
               </div>
               <div className="form-2 motor-opts">
                 <Campo etiqueta="Perfil de puertos">
                   {(id) => (
-                    <select id={id} className="select" value={nmap.puertos} onChange={(e) => setNmap("puertos", e.target.value)}>
-                      {PERFILES_PUERTOS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    <select id={id} className="select" value={nmap.puertos} onChange={(evento) => setNmap("puertos", evento.target.value)}>
+                      {PERFILES_PUERTOS.map(([perfil, etiqueta]) => <option key={perfil} value={perfil}>{etiqueta}</option>)}
                     </select>
                   )}
                 </Campo>
                 <Campo etiqueta="Tiempo máximo por escaneo (segundos)" ayuda="Si se supera, la evaluación termina como fallida.">
-                  {(id) => <input id={id} className="input" type="number" min={30} max={3600} value={nmap.timeout_s} onChange={(e) => setNmap("timeout_s", Number(e.target.value))} />}
+                  {(id) => <input id={id} className="input" type="number" min={30} max={3600} value={nmap.timeout_s} onChange={(evento) => setNmap("timeout_s", Number(evento.target.value))} />}
                 </Campo>
-                <label className="check"><input type="checkbox" checked={nmap.detectar_versiones} onChange={(e) => setNmap("detectar_versiones", e.target.checked)} /> <span>Detectar versiones de servicio (más lento, más información)</span></label>
+                <label className="check"><input type="checkbox" checked={nmap.detectar_versiones} onChange={(evento) => setNmap("detectar_versiones", evento.target.checked)} /> <span>Detectar versiones de servicio (más lento, más información)</span></label>
               </div>
             </li>
             <li>
@@ -255,14 +255,14 @@ export function Configuracion() {
                   <p className="small muted">Analiza la aplicación web en busca de vulnerabilidades del OWASP Top 10: explora el sitio y revisa cabeceras, cookies y fallos comunes.</p>
                   {zap.disponible === false && <p className="small muted">El servidor no tiene ZAP conectado (falta <span className="mono">ZAP_URL</span>). Levanta el servicio <span className="mono">zap</span> del docker-compose.</p>}
                 </div>
-                <label className="switch" aria-label="Activar OWASP ZAP"><input type="checkbox" disabled={zap.disponible !== true} checked={!!zap.activo} onChange={(e) => setZap("activo", e.target.checked)} /><i /></label>
+                <label className="switch" aria-label="Activar OWASP ZAP"><input type="checkbox" disabled={zap.disponible !== true} checked={!!zap.activo} onChange={(evento) => setZap("activo", evento.target.checked)} /><i /></label>
               </div>
               {zap.disponible === true && zap.activo && (
                 <div className="form-2 motor-opts">
                   <Campo etiqueta="Tiempo máximo del análisis web (segundos)" ayuda="Si se supera, la evaluación termina igual con los resultados de Nmap y una advertencia.">
-                    {(id) => <input id={id} className="input" type="number" min={60} max={7200} value={zap.timeout_s} onChange={(e) => setZap("timeout_s", Number(e.target.value))} />}
+                    {(id) => <input id={id} className="input" type="number" min={60} max={7200} value={zap.timeout_s} onChange={(evento) => setZap("timeout_s", Number(evento.target.value))} />}
                   </Campo>
-                  <label className="check"><input type="checkbox" checked={!!zap.escaneo_activo} onChange={(e) => setZap("escaneo_activo", e.target.checked)} /> <span>Escaneo activo (más profundo, pero envía ataques de prueba al objetivo y tarda más)</span></label>
+                  <label className="check"><input type="checkbox" checked={!!zap.escaneo_activo} onChange={(evento) => setZap("escaneo_activo", evento.target.checked)} /> <span>Escaneo activo (más profundo, pero envía ataques de prueba al objetivo y tarda más)</span></label>
                   {zap.escaneo_activo && <Aviso tipo="warn">El escaneo activo puede alterar datos del sistema evaluado. Úsalo solo en entornos de laboratorio o con autorización escrita.</Aviso>}
                 </div>
               )}
@@ -287,16 +287,16 @@ export function Configuracion() {
                 )}
               </div>
               <label className="switch" aria-label="Permitir direcciones públicas">
-                <input type="checkbox" disabled={!servidorPermitePublicas} checked={cfg.alcance.permitir_publicas} onChange={(e) => setCfg({ ...cfg, alcance: { ...cfg.alcance, permitir_publicas: e.target.checked } })} /><i />
+                <input type="checkbox" disabled={!servidorPermitePublicas} checked={configuracion.alcance.permitir_publicas} onChange={(evento) => setConfiguracion({ ...configuracion, alcance: { ...configuracion.alcance, permitir_publicas: evento.target.checked } })} /><i />
               </label>
             </div>
-            {cfg.alcance.permitir_publicas && <Aviso tipo="warn">Escanear sistemas sin autorización puede ser ilegal. Asegúrate de contar con permiso por escrito.</Aviso>}
+            {configuracion.alcance.permitir_publicas && <Aviso tipo="warn">Escanear sistemas sin autorización puede ser ilegal. Asegúrate de contar con permiso por escrito.</Aviso>}
             <div>
               <p className="label">Rangos permitidos</p>
               <ul className="chips chips-rangos">
-                {cfg.alcance.rangos.map((r) => <li key={r} className="tag mono">{r}</li>)}
+                {configuracion.alcance.rangos.map((rango) => <li key={rango} className="tag mono">{rango}</li>)}
               </ul>
-              <p className="hint">Redes privadas, loopback y link-local. La dirección del objetivo se resuelve una sola vez y se valida antes de escanear.</p>
+              <p className="hint">Redes privadas y loopback. La dirección del objetivo se resuelve una sola vez y se valida antes de escanear.</p>
             </div>
           </div>
         </Panel>
@@ -305,7 +305,7 @@ export function Configuracion() {
           <div className="stack-sm">
             <Campo etiqueta="Conservar el historial de evaluaciones">
               {(id) => (
-                <select id={id} className="select select-corto" value={cfg.retencion_dias} onChange={(e) => setCfg({ ...cfg, retencion_dias: Number(e.target.value) })}>
+                <select id={id} className="select select-corto" value={configuracion.retencion_dias} onChange={(evento) => setConfiguracion({ ...configuracion, retencion_dias: Number(evento.target.value) })}>
                   <option value={90}>90 días</option><option value={180}>180 días</option><option value={365}>1 año</option><option value={0}>Sin límite</option>
                 </select>
               )}

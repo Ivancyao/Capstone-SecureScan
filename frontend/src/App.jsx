@@ -19,9 +19,9 @@ import { Perfil, Ayuda } from "./pages/Cuenta.jsx";
 
 function RequireAuth({ children }) {
   const { user, cargando, salidaManual } = useAuth();
-  const loc = useLocation();
+  const ubicacion = useLocation();
   if (cargando) return <Spinner texto="Cargando…" />;
-  if (!user) return <Navigate to="/login" state={salidaManual() ? undefined : { desde: loc.pathname + loc.search }} replace />;
+  if (!user) return <Navigate to="/login" state={salidaManual() ? undefined : { desde: ubicacion.pathname + ubicacion.search }} replace />;
   return children;
 }
 

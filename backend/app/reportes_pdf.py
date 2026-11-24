@@ -20,15 +20,15 @@ from reportlab.platypus import (
     KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
-def _hora_local(dt: datetime) -> datetime:
+def _hora_local(fecha_hora: datetime) -> datetime:
     """Convierte una fecha guardada en UTC (sin zona) a la hora local (APP_TZ, por defecto America/Santiago)."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+    if fecha_hora.tzinfo is None:
+        fecha_hora = fecha_hora.replace(tzinfo=timezone.utc)
     try:
         from zoneinfo import ZoneInfo
-        return dt.astimezone(ZoneInfo(os.getenv("APP_TZ", "America/Santiago")))
+        return fecha_hora.astimezone(ZoneInfo(os.getenv("APP_TZ", "America/Santiago")))
     except Exception:  # sin base de zonas horarias: UTC-3 fijo (horario de verano de Chile)
-        return dt.astimezone(timezone(timedelta(hours=-3)))
+        return fecha_hora.astimezone(timezone(timedelta(hours=-3)))
 
 
 ORDEN = ["critica", "alta", "media", "baja", "informativa"]
@@ -44,7 +44,7 @@ ACENTO = colors.HexColor("#08657f")
 LINEA = colors.HexColor("#d5dde6")
 
 
-def _e(texto) -> str:
+def _escapar(texto) -> str:
     return escape(str(texto)) if texto is not None else ""
 
 
@@ -63,8 +63,8 @@ def _estilos():
 
 
 def _tabla(filas, anchos, estilo_extra=None):
-    t = Table(filas, colWidths=anchos, repeatRows=1)
-    st = [
+    tabla = Table(filas, colWidths=anchos, repeatRows=1)
+    estilo_tabla = [
         ("BACKGROUND", (0, 0), (-1, 0), ACENTO),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LINEBELOW", (0, 0), (-1, -1), 0.4, LINEA),
@@ -73,8 +73,8 @@ def _tabla(filas, anchos, estilo_extra=None):
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
     ]
-    t.setStyle(TableStyle(st + (estilo_extra or [])))
-    return t
+    tabla.setStyle(TableStyle(estilo_tabla + (estilo_extra or [])))
+    return tabla
 
 
 def _pie(canvas, doc):
@@ -92,25 +92,25 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
     Cada hallazgo: nombre_vulnerabilidad, severidad (str), cvss_score, categoria_owasp, evidencia,
     recomendacion, corregido.
     """
-    est = _estilos()
+    estilos = _estilos()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=20 * mm, title=titulo, author="SecureScan")
     ancho = A4[0] - 40 * mm
-    h = []
+    elementos = []
 
     todos = []
-    for ev in evaluaciones:
-        for x in ev["hallazgos"]:
-            todos.append({**x, "activo": ev["activo"]["nombre"]})
-    abiertos = [x for x in todos if x.get("corregido") != "si"]
-    cuenta = Counter(x["severidad"] for x in abiertos)
+    for evaluacion in evaluaciones:
+        for hallazgo in evaluacion["hallazgos"]:
+            todos.append({**hallazgo, "activo": evaluacion["activo"]["nombre"]})
+    abiertos = [hallazgo for hallazgo in todos if hallazgo.get("corregido") != "si"]
+    cuenta = Counter(hallazgo["severidad"] for hallazgo in abiertos)
 
     # ---- Portada y resumen ejecutivo ----
-    h.append(Paragraph(_e(titulo), est["titulo"]))
-    h.append(Paragraph(f"Proyecto: <b>{_e(proyecto['nombre'])}</b>", est["sub"]))
-    h.append(Paragraph(f"Generado el {_hora_local(datetime.now(timezone.utc)):%d/%m/%Y %H:%M} por {_e(generado_por)} · {len(evaluaciones)} evaluación(es) incluida(s)", est["sub"]))
+    elementos.append(Paragraph(_escapar(titulo), estilos["titulo"]))
+    elementos.append(Paragraph(f"Proyecto: <b>{_escapar(proyecto['nombre'])}</b>", estilos["sub"]))
+    elementos.append(Paragraph(f"Generado el {_hora_local(datetime.now(timezone.utc)):%d/%m/%Y %H:%M} por {_escapar(generado_por)} · {len(evaluaciones)} evaluación(es) incluida(s)", estilos["sub"]))
 
-    h.append(Paragraph("Resumen ejecutivo", est["h2"]))
+    elementos.append(Paragraph("Resumen ejecutivo", estilos["h2"]))
     if not abiertos:
         resumen = "En las evaluaciones incluidas no hay hallazgos abiertos. Esto no garantiza la ausencia de vulnerabilidades: solo refleja lo que detectaron las herramientas usadas (ver Limitaciones)."
     else:
@@ -120,77 +120,77 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
             if graves else "No hay hallazgos críticos ni altos; se recomienda revisar los de severidad media."
         )
         resumen = f"Se encontraron <b>{len(abiertos)}</b> hallazgo(s) abiertos en {len(evaluaciones)} evaluación(es). {prioridad}"
-    h.append(Paragraph(resumen, est["p"]))
-    h.append(Spacer(1, 8))
+    elementos.append(Paragraph(resumen, estilos["p"]))
+    elementos.append(Spacer(1, 8))
 
-    filas = [[Paragraph("Severidad", est["cab"]), Paragraph("Hallazgos abiertos", est["cab"])]]
+    filas = [[Paragraph("Severidad", estilos["cab"]), Paragraph("Hallazgos abiertos", estilos["cab"])]]
     extra = []
     for i, sev in enumerate(ORDEN, start=1):
-        filas.append([Paragraph(ETIQUETA[sev], est["celda_b"]), Paragraph(str(cuenta.get(sev, 0)), est["celda"])])
+        filas.append([Paragraph(ETIQUETA[sev], estilos["celda_b"]), Paragraph(str(cuenta.get(sev, 0)), estilos["celda"])])
         extra.append(("BACKGROUND", (0, i), (0, i), FONDO[sev]))
-    h.append(_tabla(filas, [ancho * 0.4, ancho * 0.6], extra))
+    elementos.append(_tabla(filas, [ancho * 0.4, ancho * 0.6], extra))
 
     # ---- Activos evaluados ----
-    h.append(Paragraph("Activos evaluados", est["h2"]))
-    filas = [[Paragraph(t, est["cab"]) for t in ("Activo", "Objetivo", "Evaluación", "Hallazgos abiertos", "Mayor severidad")]]
-    for ev in evaluaciones:
-        ab = [x for x in ev["hallazgos"] if x.get("corregido") != "si"]
-        mayor = next((ETIQUETA[s] for s in ORDEN if any(x["severidad"] == s for x in ab)), "—")
+    elementos.append(Paragraph("Activos evaluados", estilos["h2"]))
+    filas = [[Paragraph(texto, estilos["cab"]) for texto in ("Activo", "Objetivo", "Evaluación", "Hallazgos abiertos", "Mayor severidad")]]
+    for evaluacion in evaluaciones:
+        abiertos_de_la_evaluacion = [hallazgo for hallazgo in evaluacion["hallazgos"] if hallazgo.get("corregido") != "si"]
+        mayor = next((ETIQUETA[severidad] for severidad in ORDEN if any(hallazgo["severidad"] == severidad for hallazgo in abiertos_de_la_evaluacion)), "—")
         filas.append([
-            Paragraph(_e(ev["activo"]["nombre"]), est["celda_b"]),
-            Paragraph(_e(ev["activo"]["url_objetivo"]), est["celda"]),
-            Paragraph(f"{_hora_local(ev['iniciada_en']):%d/%m/%Y %H:%M}", est["celda"]),
-            Paragraph(str(len(ab)), est["celda"]),
-            Paragraph(mayor, est["celda"]),
+            Paragraph(_escapar(evaluacion["activo"]["nombre"]), estilos["celda_b"]),
+            Paragraph(_escapar(evaluacion["activo"]["url_objetivo"]), estilos["celda"]),
+            Paragraph(f"{_hora_local(evaluacion['iniciada_en']):%d/%m/%Y %H:%M}", estilos["celda"]),
+            Paragraph(str(len(abiertos_de_la_evaluacion)), estilos["celda"]),
+            Paragraph(mayor, estilos["celda"]),
         ])
-    h.append(_tabla(filas, [ancho * 0.24, ancho * 0.28, ancho * 0.18, ancho * 0.14, ancho * 0.16]))
+    elementos.append(_tabla(filas, [ancho * 0.24, ancho * 0.28, ancho * 0.18, ancho * 0.14, ancho * 0.16]))
 
     # ---- Hallazgos priorizados ----
-    h.append(Paragraph("Hallazgos priorizados", est["h2"]))
+    elementos.append(Paragraph("Hallazgos priorizados", estilos["h2"]))
     if not todos:
-        h.append(Paragraph("No se registraron hallazgos.", est["p"]))
+        elementos.append(Paragraph("No se registraron hallazgos.", estilos["p"]))
     else:
-        ordenados = sorted(todos, key=lambda x: (ORDEN.index(x["severidad"]), -(x.get("cvss_score") or 0)))
-        filas = [[Paragraph(t, est["cab"]) for t in ("Severidad", "Hallazgo", "Activo", "CVSS*", "Estado")]]
+        ordenados = sorted(todos, key=lambda hallazgo: (ORDEN.index(hallazgo["severidad"]), -(hallazgo.get("cvss_score") or 0)))
+        filas = [[Paragraph(texto, estilos["cab"]) for texto in ("Severidad", "Hallazgo", "Activo", "CVSS*", "Estado")]]
         extra = []
-        for i, x in enumerate(ordenados, start=1):
+        for i, hallazgo in enumerate(ordenados, start=1):
             filas.append([
-                Paragraph(ETIQUETA[x["severidad"]], est["celda_b"]),
-                Paragraph(f"<b>{_e(x['nombre_vulnerabilidad'])}</b><br/>{_e(x.get('evidencia'))}", est["celda"]),
-                Paragraph(_e(x["activo"]), est["celda"]),
-                Paragraph("—" if x.get("cvss_score") is None else f"{x['cvss_score']:.1f}", est["celda"]),
-                Paragraph("Corregido" if x.get("corregido") == "si" else "Abierto", est["celda"]),
+                Paragraph(ETIQUETA[hallazgo["severidad"]], estilos["celda_b"]),
+                Paragraph(f"<b>{_escapar(hallazgo['nombre_vulnerabilidad'])}</b><br/>{_escapar(hallazgo.get('evidencia'))}", estilos["celda"]),
+                Paragraph(_escapar(hallazgo["activo"]), estilos["celda"]),
+                Paragraph("—" if hallazgo.get("cvss_score") is None else f"{hallazgo['cvss_score']:.1f}", estilos["celda"]),
+                Paragraph("Corregido" if hallazgo.get("corregido") == "si" else "Abierto", estilos["celda"]),
             ])
-            extra.append(("BACKGROUND", (0, i), (0, i), FONDO[x["severidad"]]))
-        h.append(_tabla(filas, [ancho * 0.14, ancho * 0.44, ancho * 0.2, ancho * 0.09, ancho * 0.13], extra))
-        h.append(Paragraph("* CVSS estimado por reglas según el servicio expuesto; no es un cálculo vectorial completo.", est["peq"]))
+            extra.append(("BACKGROUND", (0, i), (0, i), FONDO[hallazgo["severidad"]]))
+        elementos.append(_tabla(filas, [ancho * 0.14, ancho * 0.44, ancho * 0.2, ancho * 0.09, ancho * 0.13], extra))
+        elementos.append(Paragraph("* CVSS estimado por reglas según el servicio expuesto; no es un cálculo vectorial completo.", estilos["peq"]))
 
     # ---- Recomendaciones ----
-    h.append(Paragraph("Recomendaciones", est["h2"]))
+    elementos.append(Paragraph("Recomendaciones", estilos["h2"]))
     vistas = set()
     hay = False
-    for x in sorted(abiertos, key=lambda x: (ORDEN.index(x["severidad"]), -(x.get("cvss_score") or 0))):
-        if not x.get("recomendacion") or x["nombre_vulnerabilidad"] in vistas:
+    for hallazgo in sorted(abiertos, key=lambda hallazgo: (ORDEN.index(hallazgo["severidad"]), -(hallazgo.get("cvss_score") or 0))):
+        if not hallazgo.get("recomendacion") or hallazgo["nombre_vulnerabilidad"] in vistas:
             continue
-        vistas.add(x["nombre_vulnerabilidad"])
+        vistas.add(hallazgo["nombre_vulnerabilidad"])
         hay = True
-        h.append(KeepTogether([
-            Paragraph(f"<b>{_e(x['nombre_vulnerabilidad'])}</b> — {ETIQUETA[x['severidad']]}", est["p"]),
-            Paragraph(_e(x["recomendacion"]), est["p"]),
+        elementos.append(KeepTogether([
+            Paragraph(f"<b>{_escapar(hallazgo['nombre_vulnerabilidad'])}</b> — {ETIQUETA[hallazgo['severidad']]}", estilos["p"]),
+            Paragraph(_escapar(hallazgo["recomendacion"]), estilos["p"]),
             Spacer(1, 6),
         ]))
     if not hay:
-        h.append(Paragraph("No hay recomendaciones pendientes.", est["p"]))
+        elementos.append(Paragraph("No hay recomendaciones pendientes.", estilos["p"]))
 
     # ---- Limitaciones ----
-    h.append(Paragraph("Limitaciones", est["h2"]))
-    for t in (
+    elementos.append(Paragraph("Limitaciones", estilos["h2"]))
+    for texto in (
         "Este informe refleja el estado de los sistemas en el momento de cada escaneo.",
         "Las evaluaciones usan Nmap (puertos y servicios expuestos). El análisis de aplicaciones web con OWASP ZAP aún no está integrado, por lo que no se detectan fallos propios de la aplicación (inyecciones, XSS, etc.).",
         "El puntaje CVSS es una estimación por reglas, útil para priorizar pero no equivalente a un puntaje CVSS v3.1 calculado con su vector completo.",
         "SecureScan solo evalúa ambientes de laboratorio o con autorización expresa del propietario.",
     ):
-        h.append(Paragraph("• " + _e(t), est["p"]))
+        elementos.append(Paragraph("• " + _escapar(texto), estilos["p"]))
 
-    doc.build(h, onFirstPage=_pie, onLaterPages=_pie)
+    doc.build(elementos, onFirstPage=_pie, onLaterPages=_pie)
     return buf.getvalue()

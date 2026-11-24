@@ -14,11 +14,11 @@ export function DataProvider({ children }) {
 
   const refrescar = useCallback(async () => {
     try {
-      const s = await api.snapshot();
-      setSnap(s);
+      const instantanea = await api.snapshot();
+      setSnap(instantanea);
       setError(null);
-    } catch (e) {
-      setError(e.message);
+    } catch (problema) {
+      setError(problema.message);
     }
   }, []);
 
@@ -32,35 +32,35 @@ export function DataProvider({ children }) {
   // Mientras hay un escaneo corriendo, se consulta el estado cada 2 segundos.
   useEffect(() => {
     if (!hayEnCurso) return;
-    const t = setInterval(refrescar, 2000);
-    return () => clearInterval(t);
+    const intervalo = setInterval(refrescar, 2000);
+    return () => clearInterval(intervalo);
   }, [hayEnCurso, refrescar]);
 
   // Aviso cuando una evaluación pasa de "en curso" a terminada.
   useEffect(() => {
     if (!data) return;
-    data.evaluaciones.forEach((e) => {
-      const antes = previas.current.get(e.id);
+    data.evaluaciones.forEach((evaluacion) => {
+      const antes = previas.current.get(evaluacion.id);
       if (antes && (antes === "pendiente" || antes === "en_progreso")) {
-        if (e.estado === "completada") toast.ok("Evaluación completada", `${e.activo?.nombre}: ${e.conteo.total} hallazgos.`);
-        if (e.estado === "fallida") toast.error("La evaluación falló", e.activo?.nombre);
+        if (evaluacion.estado === "completada") toast.ok("Evaluación completada", `${evaluacion.activo?.nombre}: ${evaluacion.conteo.total} hallazgos.`);
+        if (evaluacion.estado === "fallida") toast.error("La evaluación falló", evaluacion.activo?.nombre);
       }
-      previas.current.set(e.id, e.estado);
+      previas.current.set(evaluacion.id, evaluacion.estado);
     });
   }, [data, toast]);
 
   // Cada acción llama a la API, actualiza y avisa. Los errores vuelven a quien llamó.
   const accion = useCallback(
-    (fn, okTitulo) =>
+    (funcion, okTitulo) =>
       async (...args) => {
         try {
-          const r = await fn(...args);
+          const resultado = await funcion(...args);
           await refrescar();
           if (okTitulo) toast.ok(okTitulo);
-          return r;
-        } catch (e) {
-          toast.error("No se pudo completar la acción", e.message);
-          throw e;
+          return resultado;
+        } catch (problema) {
+          toast.error("No se pudo completar la acción", problema.message);
+          throw problema;
         }
       },
     [refrescar, toast]
@@ -68,18 +68,18 @@ export function DataProvider({ children }) {
 
   const acciones = useMemo(
     () => ({
-      crearProyecto: accion((d) => api.crearProyecto(d), "Proyecto creado"),
-      crearActivo: accion((pid, d) => api.crearActivo(pid, d), "Activo registrado"),
-      iniciarEvaluacion: accion((aid) => api.iniciarEvaluacion(aid), "Evaluación iniciada"),
+      crearProyecto: accion((datos) => api.crearProyecto(datos), "Proyecto creado"),
+      crearActivo: accion((proyectoId, datos) => api.crearActivo(proyectoId, datos), "Activo registrado"),
+      iniciarEvaluacion: accion((activoId) => api.iniciarEvaluacion(activoId), "Evaluación iniciada"),
       cancelarEvaluacion: accion((id) => api.cancelarEvaluacion(id), "Evaluación cancelada"),
       eliminarEvaluacion: accion((id) => api.eliminarEvaluacion(id), "Evaluación eliminada"),
-      marcarCorregido: accion((id, v) => api.marcarCorregido(id, v), null),
-      crearReporte: accion((d) => api.crearReporte(d), "Reporte generado"),
+      marcarCorregido: accion((id, corregido) => api.marcarCorregido(id, corregido), null),
+      crearReporte: accion((datos) => api.crearReporte(datos), "Reporte generado"),
       eliminarReporte: accion((id) => api.eliminarReporte(id), "Reporte eliminado"),
       cambiarRol: accion((id, rol) => api.cambiarRol(id, rol), "Rol actualizado"),
       alternarUsuario: accion((id, activar) => api.alternarUsuario(id, activar), "Cuenta actualizada"),
-      invitarUsuario: accion((d) => api.invitarUsuario(d), "Cuenta creada"),
-      guardarConfig: accion((c) => api.guardarConfig(c), "Configuración guardada"),
+      invitarUsuario: accion((datos) => api.invitarUsuario(datos), "Cuenta creada"),
+      guardarConfig: accion((configuracion) => api.guardarConfig(configuracion), "Configuración guardada"),
       restablecer: accion(() => api.restablecer(), "Datos de ejemplo restablecidos"),
     }),
     [accion]

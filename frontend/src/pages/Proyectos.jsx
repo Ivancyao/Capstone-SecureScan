@@ -15,7 +15,7 @@ export function Proyectos() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [modal, setModal] = useState(params.get("nuevo") === "1");
-  const duenos = Object.fromEntries((data.usuarios || []).map((u) => [u.id, u.nombre]));
+  const duenos = Object.fromEntries((data.usuarios || []).map((usuario) => [usuario.id, usuario.nombre]));
 
   useEffect(() => {
     if (params.get("nuevo") === "1") {
@@ -37,8 +37,8 @@ export function Proyectos() {
         </div>
       ) : (
         <div className="cards">
-          {data.proyectos.map((p) => (
-            <TarjetaProyecto key={p.id} proyecto={p} dueno={user.rol === "admin" ? duenos[p.propietario_id] : null} />
+          {data.proyectos.map((proyecto) => (
+            <TarjetaProyecto key={proyecto.id} proyecto={proyecto} dueno={user.rol === "admin" ? duenos[proyecto.propietario_id] : null} />
           ))}
         </div>
       )}
@@ -50,38 +50,38 @@ export function Proyectos() {
 export function ProyectoDetalle() {
   const { id } = useParams();
   const { data } = useData();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const [tab, setTab] = useState("activos");
   const [modal, setModal] = useState(false);
-  const p = data.proyectosPorId[id];
-  useTitulo(p?.nombre || "Proyecto");
-  if (!p) return <NoEncontrado que="El proyecto" volver="/proyectos" etiqueta="Ver proyectos" />;
+  const proyecto = data.proyectosPorId[id];
+  useTitulo(proyecto?.nombre || "Proyecto");
+  if (!proyecto) return <NoEncontrado que="El proyecto" volver="/proyectos" etiqueta="Ver proyectos" />;
 
   return (
     <>
       <PageHeader
-        migas={[{ texto: "Proyectos", to: "/proyectos" }, { texto: p.nombre }]}
-        titulo={p.nombre}
-        descripcion={p.descripcion}
+        migas={[{ texto: "Proyectos", to: "/proyectos" }, { texto: proyecto.nombre }]}
+        titulo={proyecto.nombre}
+        descripcion={proyecto.descripcion}
         acciones={
           <>
             <button className="btn" onClick={() => setModal(true)}><Icon name="plus" size={16} /> Registrar activo</button>
-            <Link to={`/reportes?proyecto=${p.id}`} className="btn"><Icon name="file" size={16} /> Generar reporte</Link>
+            <Link to={`/reportes?proyecto=${proyecto.id}`} className="btn"><Icon name="file" size={16} /> Generar reporte</Link>
           </>
         }
       />
 
       <div className="grid-main-r panel-gap">
         <Panel titulo="Hallazgos abiertos" descripcion="De la última evaluación de cada activo">
-          <ResumenSeveridad conteo={p.conteo} />
+          <ResumenSeveridad conteo={proyecto.conteo} />
         </Panel>
         <Panel titulo="Resumen">
           <dl className="kv">
-            <dt>Activos</dt><dd className="num">{p.activos.length}</dd>
-            <dt>Evaluaciones</dt><dd className="num">{p.evaluaciones.length}</dd>
-            <dt>Última evaluación</dt><dd>{p.ultima ? `${fmtFecha(p.ultima.iniciada_en)} (${hace(p.ultima.iniciada_en)})` : "Sin evaluaciones"}</dd>
-            <dt>Reportes</dt><dd className="num">{p.reportes.length}</dd>
-            <dt>Creado</dt><dd>{fmtFecha(p.creado_en)}</dd>
+            <dt>Activos</dt><dd className="num">{proyecto.activos.length}</dd>
+            <dt>Evaluaciones</dt><dd className="num">{proyecto.evaluaciones.length}</dd>
+            <dt>Última evaluación</dt><dd>{proyecto.ultima ? `${fmtFecha(proyecto.ultima.iniciada_en)} (${hace(proyecto.ultima.iniciada_en)})` : "Sin evaluaciones"}</dd>
+            <dt>Reportes</dt><dd className="num">{proyecto.reportes.length}</dd>
+            <dt>Creado</dt><dd>{fmtFecha(proyecto.creado_en)}</dd>
           </dl>
         </Panel>
       </div>
@@ -90,46 +90,46 @@ export function ProyectoDetalle() {
         valor={tab}
         onChange={setTab}
         tabs={[
-          { valor: "activos", etiqueta: "Activos", n: p.activos.length },
-          { valor: "evaluaciones", etiqueta: "Evaluaciones", n: p.evaluaciones.length },
-          { valor: "reportes", etiqueta: "Reportes", n: p.reportes.length },
+          { valor: "activos", etiqueta: "Activos", n: proyecto.activos.length },
+          { valor: "evaluaciones", etiqueta: "Evaluaciones", n: proyecto.evaluaciones.length },
+          { valor: "reportes", etiqueta: "Reportes", n: proyecto.reportes.length },
         ]}
       />
       <div className="panel panel-tab">
         {tab === "activos" &&
-          (p.activos.length === 0 ? (
+          (proyecto.activos.length === 0 ? (
             <EmptyState icono="server" titulo="Este proyecto no tiene activos" texto="Registra la primera aplicación o servidor que quieras evaluar." accion={<button className="btn btn-primary" onClick={() => setModal(true)}>Registrar activo</button>} />
           ) : (
             <ul className="rows">
-              {p.activos.map((a) => (
-                <li key={a.id} className="clic" onClick={() => nav(`/activos/${a.id}`)}>
+              {proyecto.activos.map((activo) => (
+                <li key={activo.id} className="clic" onClick={() => navegar(`/activos/${activo.id}`)}>
                   <div className="grow">
-                    <Link to={`/activos/${a.id}`} className="titulo" onClick={(e) => e.stopPropagation()}>{a.nombre}</Link>
-                    <span className="sub mono">{a.url_objetivo}</span>
+                    <Link to={`/activos/${activo.id}`} className="titulo" onClick={(evento) => evento.stopPropagation()}>{activo.nombre}</Link>
+                    <span className="sub mono">{activo.url_objetivo}</span>
                   </div>
-                  <div className="row-bar"><SeverityBar conteo={a.conteo} alto={10} /></div>
-                  <Sparkline valores={a.serie} />
-                  <div className="col-sev"><SevBadge sev={a.maxSev} /></div>
-                  <span onClick={(e) => e.stopPropagation()}><EvaluarBoton activo={a} pequeno texto="Evaluar" /></span>
+                  <div className="row-bar"><SeverityBar conteo={activo.conteo} alto={10} /></div>
+                  <Sparkline valores={activo.serie} />
+                  <div className="col-sev"><SevBadge sev={activo.maxSev} /></div>
+                  <span onClick={(evento) => evento.stopPropagation()}><EvaluarBoton activo={activo} pequeno texto="Evaluar" /></span>
                 </li>
               ))}
             </ul>
           ))}
         {tab === "evaluaciones" &&
-          (p.evaluaciones.length === 0 ? (
+          (proyecto.evaluaciones.length === 0 ? (
             <EmptyState icono="radar" titulo="Sin evaluaciones todavía" texto="Inicia una desde cualquier activo del proyecto." />
           ) : (
             <div className="table-wrap">
               <table className="tabla tabla-clic">
                 <thead><tr><th>Activo</th><th>Estado</th><th>Hallazgos</th><th>Inicio</th><th>Duración</th></tr></thead>
                 <tbody>
-                  {p.evaluaciones.map((e) => (
-                    <tr key={e.id} onClick={() => nav(`/evaluaciones/${e.id}`)}>
-                      <td className="celda-titulo"><Link to={`/evaluaciones/${e.id}`} onClick={(ev) => ev.stopPropagation()}>{e.activo?.nombre}</Link></td>
-                      <td><EstadoBadge estado={e.estado} /></td>
-                      <td className="num">{e.estado === "completada" ? e.conteo.total : "—"}</td>
-                      <td>{fmtFecha(e.iniciada_en)}</td>
-                      <td className="num">{fmtDuracion(e.iniciada_en, e.finalizada_en)}</td>
+                  {proyecto.evaluaciones.map((evaluacion) => (
+                    <tr key={evaluacion.id} onClick={() => navegar(`/evaluaciones/${evaluacion.id}`)}>
+                      <td className="celda-titulo"><Link to={`/evaluaciones/${evaluacion.id}`} onClick={(evento) => evento.stopPropagation()}>{evaluacion.activo?.nombre}</Link></td>
+                      <td><EstadoBadge estado={evaluacion.estado} /></td>
+                      <td className="num">{evaluacion.estado === "completada" ? evaluacion.conteo.total : "—"}</td>
+                      <td>{fmtFecha(evaluacion.iniciada_en)}</td>
+                      <td className="num">{fmtDuracion(evaluacion.iniciada_en, evaluacion.finalizada_en)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -137,24 +137,24 @@ export function ProyectoDetalle() {
             </div>
           ))}
         {tab === "reportes" &&
-          (p.reportes.length === 0 ? (
-            <EmptyState icono="file" titulo="Sin reportes" texto="Genera un informe con las evaluaciones de este proyecto." accion={<Link to={`/reportes?proyecto=${p.id}`} className="btn btn-primary">Generar reporte</Link>} />
+          (proyecto.reportes.length === 0 ? (
+            <EmptyState icono="file" titulo="Sin reportes" texto="Genera un informe con las evaluaciones de este proyecto." accion={<Link to={`/reportes?proyecto=${proyecto.id}`} className="btn btn-primary">Generar reporte</Link>} />
           ) : (
             <ul className="rows">
-              {p.reportes.map((r) => (
-                <li key={r.id} className="clic" onClick={() => nav(`/reportes/${r.id}`)}>
+              {proyecto.reportes.map((reporte) => (
+                <li key={reporte.id} className="clic" onClick={() => navegar(`/reportes/${reporte.id}`)}>
                   <span className="icono-caja"><Icon name="file" size={18} /></span>
                   <div className="grow">
-                    <Link to={`/reportes/${r.id}`} className="titulo" onClick={(e) => e.stopPropagation()}>{r.titulo}</Link>
-                    <span className="sub">{fmtFecha(r.generado_en)} · {r.generado_por}</span>
+                    <Link to={`/reportes/${reporte.id}`} className="titulo" onClick={(evento) => evento.stopPropagation()}>{reporte.titulo}</Link>
+                    <span className="sub">{fmtFecha(reporte.generado_en)} · {reporte.generado_por}</span>
                   </div>
-                  <Tag>{plural(r.evaluacion_ids.length, "evaluación", "evaluaciones")}</Tag>
+                  <Tag>{plural(reporte.evaluacion_ids.length, "evaluación", "evaluaciones")}</Tag>
                 </li>
               ))}
             </ul>
           ))}
       </div>
-      <ActivoModal abierto={modal} onClose={() => setModal(false)} proyectoId={p.id} />
+      <ActivoModal abierto={modal} onClose={() => setModal(false)} proyectoId={proyecto.id} />
     </>
   );
 }

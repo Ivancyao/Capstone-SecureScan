@@ -22,19 +22,19 @@ export function Layout() {
   const { data, error, cargando, refrescar } = useData();
   const { oscuro, alternar } = useTheme();
   const [abierto, setAbierto] = useState(false);
-  const [q, setQ] = useState("");
-  const loc = useLocation();
-  const nav = useNavigate();
+  const [busqueda, setBusqueda] = useState("");
+  const ubicacion = useLocation();
+  const navegar = useNavigate();
 
   useEffect(() => {
     setAbierto(false);
     window.scrollTo(0, 0);
-  }, [loc.pathname]);
+  }, [ubicacion.pathname]);
 
-  const buscar = (e) => {
-    e.preventDefault();
-    nav(`/hallazgos${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
-    setQ("");
+  const buscar = (evento) => {
+    evento.preventDefault();
+    navegar(`/hallazgos${busqueda.trim() ? `?q=${encodeURIComponent(busqueda.trim())}` : ""}`);
+    setBusqueda("");
   };
 
   const criticos = data?.conteoGlobal.critica || 0;
@@ -98,7 +98,7 @@ export function Layout() {
           </button>
           <form className="search" onSubmit={buscar} role="search">
             <Icon name="search" size={16} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar hallazgos, puertos o servicios" aria-label="Buscar hallazgos" />
+            <input value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar hallazgos, puertos o servicios" aria-label="Buscar hallazgos" />
           </form>
           <div className="topbar-right">
             {USE_MOCK && (

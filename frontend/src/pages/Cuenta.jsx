@@ -14,16 +14,16 @@ export function Perfil() {
   const { preferencia, elegir } = useTheme();
   const toast = useToast();
   const [nombre, setNombre] = useState(user.nombre);
-  const [pw, setPw] = useState({ actual: "", nueva: "", repetir: "" });
+  const [contrasenas, setContrasenas] = useState({ actual: "", nueva: "", repetir: "" });
   const [errPw, setErrPw] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  const guardarNombre = async (e) => {
-    e.preventDefault();
+  const guardarNombre = async (evento) => {
+    evento.preventDefault();
     setGuardando(true);
     try {
-      const u = await api.actualizarPerfil({ nombre });
-      setUser(u);
+      const usuarioActualizado = await api.actualizarPerfil({ nombre });
+      setUser(usuarioActualizado);
       toast.ok("Perfil actualizado");
     } catch (err) {
       toast.error("No se pudo actualizar", err.message);
@@ -32,14 +32,14 @@ export function Perfil() {
     }
   };
 
-  const cambiarPw = async (e) => {
-    e.preventDefault();
+  const cambiarPw = async (evento) => {
+    evento.preventDefault();
     setErrPw("");
-    if (pw.nueva.length < 8) return setErrPw("La nueva contraseña debe tener al menos 8 caracteres.");
-    if (pw.nueva !== pw.repetir) return setErrPw("Las contraseñas nuevas no coinciden.");
+    if (contrasenas.nueva.length < 8) return setErrPw("La nueva contraseña debe tener al menos 8 caracteres.");
+    if (contrasenas.nueva !== contrasenas.repetir) return setErrPw("Las contraseñas nuevas no coinciden.");
     try {
-      await api.cambiarPassword({ actual: pw.actual, nueva: pw.nueva });
-      setPw({ actual: "", nueva: "", repetir: "" });
+      await api.cambiarPassword({ actual: contrasenas.actual, nueva: contrasenas.nueva });
+      setContrasenas({ actual: "", nueva: "", repetir: "" });
       toast.ok("Contraseña actualizada");
     } catch (err) {
       setErrPw(err.message);
@@ -57,7 +57,7 @@ export function Perfil() {
                 <Avatar nombre={user.nombre} size={52} />
                 <div><strong>{user.nombre}</strong><div><RolBadge rol={user.rol} /></div></div>
               </div>
-              <Campo etiqueta="Nombre">{(id) => <input id={id} className="input" value={nombre} onChange={(e) => setNombre(e.target.value)} minLength={2} required />}</Campo>
+              <Campo etiqueta="Nombre">{(id) => <input id={id} className="input" value={nombre} onChange={(evento) => setNombre(evento.target.value)} minLength={2} required />}</Campo>
               <Campo etiqueta="Correo" ayuda="El correo no se puede cambiar.">{(id) => <input id={id} className="input" value={user.email} readOnly disabled />}</Campo>
               <div><button className="btn btn-primary" disabled={guardando || nombre.trim() === user.nombre}>Guardar cambios</button></div>
             </form>
@@ -65,10 +65,10 @@ export function Perfil() {
 
           <Panel titulo="Cambiar contraseña">
             <form className="form-grid" onSubmit={cambiarPw}>
-              <Campo etiqueta="Contraseña actual">{(id) => <input id={id} className="input" type="password" autoComplete="current-password" value={pw.actual} onChange={(e) => setPw({ ...pw, actual: e.target.value })} required />}</Campo>
+              <Campo etiqueta="Contraseña actual">{(id) => <input id={id} className="input" type="password" autoComplete="current-password" value={contrasenas.actual} onChange={(evento) => setContrasenas({ ...contrasenas, actual: evento.target.value })} required />}</Campo>
               <div className="form-2">
-                <Campo etiqueta="Nueva contraseña" ayuda="Al menos 8 caracteres.">{(id) => <input id={id} className="input" type="password" autoComplete="new-password" value={pw.nueva} onChange={(e) => setPw({ ...pw, nueva: e.target.value })} required />}</Campo>
-                <Campo etiqueta="Repite la nueva">{(id) => <input id={id} className="input" type="password" autoComplete="new-password" value={pw.repetir} onChange={(e) => setPw({ ...pw, repetir: e.target.value })} required />}</Campo>
+                <Campo etiqueta="Nueva contraseña" ayuda="Al menos 8 caracteres.">{(id) => <input id={id} className="input" type="password" autoComplete="new-password" value={contrasenas.nueva} onChange={(evento) => setContrasenas({ ...contrasenas, nueva: evento.target.value })} required />}</Campo>
+                <Campo etiqueta="Repite la nueva">{(id) => <input id={id} className="input" type="password" autoComplete="new-password" value={contrasenas.repetir} onChange={(evento) => setContrasenas({ ...contrasenas, repetir: evento.target.value })} required />}</Campo>
               </div>
               {errPw && <p className="field-error" role="alert">{errPw}</p>}
               <div><button className="btn btn-primary">Actualizar contraseña</button></div>
@@ -135,10 +135,10 @@ export function Ayuda() {
               ["Lanza una evaluación", "Corre en segundo plano. Puedes ver el avance en vivo o volver más tarde.", "/evaluaciones/nueva", "Nueva evaluación"],
               ["Corrige y vuelve a evaluar", "Empieza por lo más grave, marca lo corregido y confirma con otra evaluación.", "/hallazgos", "Ver hallazgos"],
               ["Genera el reporte", "Reúne los resultados en un informe para tu equipo o tu cliente.", "/reportes", "Ver reportes"],
-            ].map(([t, d, to, a], i) => (
-              <li key={t} className="paso">
-                <span className="paso-dot">{i + 1}</span>
-                <div><strong>{t}</strong><p className="small muted">{d}</p> <Link className="small" to={to}>{a}</Link></div>
+            ].map(([titulo, descripcion, to, textoEnlace], indice) => (
+              <li key={titulo} className="paso">
+                <span className="paso-dot">{indice + 1}</span>
+                <div><strong>{titulo}</strong><p className="small muted">{descripcion}</p> <Link className="small" to={to}>{textoEnlace}</Link></div>
               </li>
             ))}
           </ol>
@@ -149,7 +149,7 @@ export function Ayuda() {
             <table className="tabla tabla-compacta">
               <thead><tr><th>Severidad</th><th>Puntaje CVSS</th><th>Qué hacer</th></tr></thead>
               <tbody>
-                {SEVERIDADES.map((s) => <tr key={s}><td><SevBadge sev={s} /></td><td className="num">{SEV[s].rango}</td><td>{SEV[s].accion}</td></tr>)}
+                {SEVERIDADES.map((severidad) => <tr key={severidad}><td><SevBadge sev={severidad} /></td><td className="num">{SEV[severidad].rango}</td><td>{SEV[severidad].accion}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -158,11 +158,11 @@ export function Ayuda() {
 
         <Panel titulo="OWASP Top 10 (2021)" id="owasp" descripcion="Las diez categorías, y cuáles detecta hoy la plataforma">
           <ul className="owasp-lista">
-            {Object.entries(OWASP).map(([c, n]) => (
-              <li key={c}>
-                <b>{c}</b>
-                <span>{n}</span>
-                <span className="small muted">{IMPLEMENTADAS[c] || ""}</span>
+            {Object.entries(OWASP).map(([codigo, nombre]) => (
+              <li key={codigo}>
+                <b>{codigo}</b>
+                <span>{nombre}</span>
+                <span className="small muted">{IMPLEMENTADAS[codigo] || ""}</span>
               </li>
             ))}
           </ul>
@@ -171,15 +171,15 @@ export function Ayuda() {
         <div className="grid-2">
           <Panel titulo="Glosario">
             <dl className="glosario">
-              {GLOSARIO.map(([t, d]) => <div key={t}><dt>{t}</dt><dd className="soft">{d}</dd></div>)}
+              {GLOSARIO.map(([termino, definicion]) => <div key={termino}><dt>{termino}</dt><dd className="soft">{definicion}</dd></div>)}
             </dl>
           </Panel>
           <Panel titulo="Preguntas frecuentes">
             <div className="faq">
-              {FAQ.map(([q, a]) => (
-                <details key={q}>
-                  <summary>{q}<Icon name="chevron-down" size={16} /></summary>
-                  <p className="small soft">{a}</p>
+              {FAQ.map(([pregunta, respuesta]) => (
+                <details key={pregunta}>
+                  <summary>{pregunta}<Icon name="chevron-down" size={16} /></summary>
+                  <p className="small soft">{respuesta}</p>
                 </details>
               ))}
             </div>

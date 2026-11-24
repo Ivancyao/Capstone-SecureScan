@@ -57,19 +57,19 @@ class ZapClient:
         if self.api_key:
             params["apikey"] = self.api_key
         try:
-            r = self._http.get(ruta, params=params)
+            respuesta = self._http.get(ruta, params=params)
         except httpx.HTTPError:
             raise ZapError(f"No se pudo conectar con OWASP ZAP en {self.base_url}") from None
-        if r.status_code in (401, 403):
+        if respuesta.status_code in (401, 403):
             raise ZapError("OWASP ZAP rechazó la clave de API (revisa ZAP_API_KEY)")
-        if r.status_code >= 400:
+        if respuesta.status_code >= 400:
             try:
-                detalle = r.json().get("message") or r.json().get("code") or r.text[:100]
+                detalle = respuesta.json().get("message") or respuesta.json().get("code") or respuesta.text[:100]
             except ValueError:
-                detalle = r.text[:100]
-            raise ZapError(f"OWASP ZAP respondió con error {r.status_code}: {detalle}")
+                detalle = respuesta.text[:100]
+            raise ZapError(f"OWASP ZAP respondió con error {respuesta.status_code}: {detalle}")
         try:
-            return r.json()
+            return respuesta.json()
         except ValueError:
             raise ZapError("Respuesta inesperada de OWASP ZAP") from None
 
@@ -96,10 +96,10 @@ class ZapClient:
 
     # ---------- escaneo ----------
     def _lanzar_y_esperar(self, componente: str, url: str, limite: float, que: str, **extra) -> None:
-        r = self._get(f"/JSON/{componente}/action/scan/", url=url, **extra)
-        scan_id = r.get("scan")
+        respuesta = self._get(f"/JSON/{componente}/action/scan/", url=url, **extra)
+        scan_id = respuesta.get("scan")
         if scan_id is None:
-            raise ZapError(f"OWASP ZAP no inició el análisis ({componente}): {r}")
+            raise ZapError(f"OWASP ZAP no inició el análisis ({componente}): {respuesta}")
 
         def terminado() -> bool:
             estado = self._get(f"/JSON/{componente}/view/status/", scanId=scan_id).get("status")
@@ -166,18 +166,18 @@ _ETIQUETA = re.compile(r"<[^>]+>")
 
 def _limpio(texto: Optional[str], maximo: int) -> str:
     """ZAP entrega HTML en descripción y solución; se deja texto plano y acotado."""
-    t = _ETIQUETA.sub(" ", (texto or "").replace("</p>", "\n"))
-    t = re.sub(r"[ \t]+", " ", t)
-    t = re.sub(r"\s*\n\s*", " ", t).strip()
-    return t if len(t) <= maximo else t[: maximo - 1].rstrip() + "…"
+    texto_limpio = _ETIQUETA.sub(" ", (texto or "").replace("</p>", "\n"))
+    texto_limpio = re.sub(r"[ \t]+", " ", texto_limpio)
+    texto_limpio = re.sub(r"\s*\n\s*", " ", texto_limpio).strip()
+    return texto_limpio if len(texto_limpio) <= maximo else texto_limpio[: maximo - 1].rstrip() + "…"
 
 
 def categoria_owasp(alerta: Dict) -> Optional[str]:
     """Busca etiquetas como 'OWASP_2021_A03' en la alerta (ZAP 2.11 en adelante)."""
     for etiqueta in (alerta.get("tags") or {}):
-        m = re.fullmatch(r"OWASP_2021_(A\d{2})", str(etiqueta))
-        if m and m.group(1) in OWASP_2021:
-            return OWASP_2021[m.group(1)]
+        coincidencia = re.fullmatch(r"OWASP_2021_(A\d{2})", str(etiqueta))
+        if coincidencia and coincidencia.group(1) in OWASP_2021:
+            return OWASP_2021[coincidencia.group(1)]
     return None
 
 
@@ -188,39 +188,39 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
     Devuelve dicts listos para crear un Hallazgo.
     """
     grupos: "OrderedDict[str, List[Dict]]" = OrderedDict()
-    for a in alertas:
-        grupos.setdefault(f"{a.get('pluginId', '')}|{a.get('alert') or a.get('name', '')}", []).append(a)
+    for alerta in alertas:
+        grupos.setdefault(f"{alerta.get('pluginId', '')}|{alerta.get('alert') or alerta.get('name', '')}", []).append(alerta)
 
     hallazgos = []
     for items in grupos.values():
-        a = items[0]
-        severidad = severidad_zap(a)
+        alerta = items[0]
+        severidad = severidad_zap(alerta)
         cvss = _CVSS_ESTIMADO[severidad]
         ejemplos = []
-        for x in items[:3]:
-            e = x.get("url", "")
-            if x.get("param"):
-                e += f" (parámetro: {x['param']})"
-            ejemplos.append(e)
+        for instancia in items[:3]:
+            descripcion_de_ejemplo = instancia.get("url", "")
+            if instancia.get("param"):
+                descripcion_de_ejemplo += f" (parámetro: {instancia['param']})"
+            ejemplos.append(descripcion_de_ejemplo)
         evidencia = f"{len(items)} instancia(s). Ejemplos: " + "; ".join(ejemplos)
-        if a.get("evidence"):
-            evidencia += f". Evidencia: {_limpio(a['evidence'], 160)}"
-        original = (a.get("alert") or a.get("name") or "Alerta de ZAP")
-        es = traducir(a)
-        if es:
-            nombre, desc, recomendacion = es
+        if alerta.get("evidence"):
+            evidencia += f". Evidencia: {_limpio(alerta['evidence'], 160)}"
+        original = (alerta.get("alert") or alerta.get("name") or "Alerta de ZAP")
+        traduccion = traducir(alerta)
+        if traduccion:
+            nombre, desc, recomendacion = traduccion
             evidencia += f". {desc} (Alerta original de ZAP: {original}.)"
         else:
             # Alerta fuera del catálogo: se conserva el texto original de ZAP (en inglés) y se avisa
             nombre = original
-            desc = _limpio(a.get("description"), 280)
+            desc = _limpio(alerta.get("description"), 280)
             if desc:
                 evidencia += f". Descripción original de ZAP (en inglés): {desc}"
-            recomendacion = _limpio(a.get("solution"), 600) or "Revisar la alerta en OWASP ZAP y corregir según su guía."
+            recomendacion = _limpio(alerta.get("solution"), 600) or "Revisar la alerta en OWASP ZAP y corregir según su guía."
         hallazgos.append(
             {
                 "nombre_vulnerabilidad": nombre[:200],
-                "categoria_owasp": categoria_owasp(a),
+                "categoria_owasp": categoria_owasp(alerta),
                 "cvss_score": cvss,
                 "severidad": risk.severidad_desde_cvss(cvss),
                 "evidencia": evidencia[:1500],
@@ -229,4 +229,4 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
             }
         )
     orden = {"alta": 0, "media": 1, "baja": 2, "informativa": 3}
-    return sorted(hallazgos, key=lambda h: (orden[h["severidad"].value], h["nombre_vulnerabilidad"]))
+    return sorted(hallazgos, key=lambda hallazgo: (orden[hallazgo["severidad"].value], hallazgo["nombre_vulnerabilidad"]))

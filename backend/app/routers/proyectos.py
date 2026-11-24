@@ -24,46 +24,46 @@ from app.schemas import (
 )
 from app.cancelacion import ETAPA_CANCELADA
 from app.scan_service import ejecutar_evaluacion
-from app.security import get_current_user
+from app.security import obtener_usuario_actual
 from app.tiempo import ahora_utc
 
 router = APIRouter(tags=["Proyectos, Activos y Evaluaciones"])
 
 
-def _get_proyecto_or_404(db: Session, proyecto_id: str, user: Usuario) -> Proyecto:
+def _get_proyecto_or_404(db: Session, proyecto_id: str, usuario: Usuario) -> Proyecto:
     proyecto = db.query(Proyecto).filter(Proyecto.id == proyecto_id).first()
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
-    if proyecto.propietario_id != user.id and user.rol != RolUsuario.ADMIN:
+    if proyecto.propietario_id != usuario.id and usuario.rol != RolUsuario.ADMIN:
         # Respondemos 404 (no 403) para no revelar que el recurso existe.
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
     return proyecto
 
 
-def _get_activo_or_404(db: Session, activo_id: str, user: Usuario) -> Activo:
+def _get_activo_or_404(db: Session, activo_id: str, usuario: Usuario) -> Activo:
     activo = db.query(Activo).filter(Activo.id == activo_id).first()
     if not activo:
         raise HTTPException(status_code=404, detail="Activo no encontrado")
-    _get_proyecto_or_404(db, activo.proyecto_id, user)  # reutiliza la verificación de propiedad
+    _get_proyecto_or_404(db, activo.proyecto_id, usuario)  # reutiliza la verificación de propiedad
     return activo
 
 
-def _get_evaluacion_or_404(db: Session, evaluacion_id: str, user: Usuario) -> Evaluacion:
+def _get_evaluacion_or_404(db: Session, evaluacion_id: str, usuario: Usuario) -> Evaluacion:
     evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
     if not evaluacion:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
-    _get_activo_or_404(db, evaluacion.activo_id, user)  # misma verificación de propiedad
+    _get_activo_or_404(db, evaluacion.activo_id, usuario)  # misma verificación de propiedad
     return evaluacion
 
 
 # ---------------- Proyectos ----------------
 @router.post("/proyectos", response_model=ProyectoOut, status_code=status.HTTP_201_CREATED)
 def crear_proyecto(
-    data: ProyectoCreate,
+    datos: ProyectoCreate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    proyecto = Proyecto(nombre=data.nombre, descripcion=data.descripcion, propietario_id=user.id)
+    proyecto = Proyecto(nombre=datos.nombre, descripcion=datos.descripcion, propietario_id=usuario.id)
     db.add(proyecto)
     db.commit()
     db.refresh(proyecto)
@@ -72,26 +72,26 @@ def crear_proyecto(
 
 @router.get("/proyectos", response_model=List[ProyectoOut])
 def listar_proyectos(
-    db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)
+    db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)
 ):
     query = db.query(Proyecto)
-    if user.rol != RolUsuario.ADMIN:
-        query = query.filter(Proyecto.propietario_id == user.id)
+    if usuario.rol != RolUsuario.ADMIN:
+        query = query.filter(Proyecto.propietario_id == usuario.id)
     return query.order_by(Proyecto.creado_en.desc()).all()
 
 
-def _ids_de_proyectos_visibles(db: Session, user: Usuario) -> List[str]:
-    q = db.query(Proyecto.id)
-    if user.rol != RolUsuario.ADMIN:
-        q = q.filter(Proyecto.propietario_id == user.id)
-    return [i for (i,) in q.all()]
+def _ids_de_proyectos_visibles(db: Session, usuario: Usuario) -> List[str]:
+    consulta = db.query(Proyecto.id)
+    if usuario.rol != RolUsuario.ADMIN:
+        consulta = consulta.filter(Proyecto.propietario_id == usuario.id)
+    return [proyecto_id for (proyecto_id,) in consulta.all()]
 
 
 # ---------------- Activos ----------------
 @router.get("/activos", response_model=List[ActivoOut])
-def listar_todos_los_activos(db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
+def listar_todos_los_activos(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
     """Todos los activos que el usuario puede ver (los de sus proyectos; el admin ve todos)."""
-    ids = _ids_de_proyectos_visibles(db, user)
+    ids = _ids_de_proyectos_visibles(db, usuario)
     if not ids:
         return []
     return db.query(Activo).filter(Activo.proyecto_id.in_(ids)).order_by(Activo.creado_en.asc()).all()
@@ -104,16 +104,16 @@ def listar_todos_los_activos(db: Session = Depends(get_db), user: Usuario = Depe
 )
 def crear_activo(
     proyecto_id: str,
-    data: ActivoCreate,
+    datos: ActivoCreate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    _get_proyecto_or_404(db, proyecto_id, user)
+    _get_proyecto_or_404(db, proyecto_id, usuario)
     activo = Activo(
         proyecto_id=proyecto_id,
-        nombre=data.nombre,
-        url_objetivo=data.url_objetivo,
-        descripcion=data.descripcion,
+        nombre=datos.nombre,
+        url_objetivo=datos.url_objetivo,
+        descripcion=datos.descripcion,
     )
     db.add(activo)
     db.commit()
@@ -125,9 +125,9 @@ def crear_activo(
 def listar_activos(
     proyecto_id: str,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    _get_proyecto_or_404(db, proyecto_id, user)
+    _get_proyecto_or_404(db, proyecto_id, usuario)
     return db.query(Activo).filter(Activo.proyecto_id == proyecto_id).all()
 
 
@@ -141,13 +141,13 @@ def iniciar_evaluacion(
     activo_id: str,
     background: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """
     Crea la evaluación (PENDIENTE) y lanza el escaneo en segundo plano.
     La respuesta es inmediata; el cliente consulta el estado hasta que sea COMPLETADA o FALLIDA.
     """
-    _get_activo_or_404(db, activo_id, user)
+    _get_activo_or_404(db, activo_id, usuario)
 
     # Una sola evaluación a la vez por activo. Las que quedaron "colgadas" (más antiguas que
     # el tiempo máximo de escaneo) no cuentan, para que un fallo no bloquee el activo para siempre.
@@ -177,9 +177,9 @@ def iniciar_evaluacion(
 def listar_evaluaciones(
     activo_id: str,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    _get_activo_or_404(db, activo_id, user)
+    _get_activo_or_404(db, activo_id, usuario)
     return (
         db.query(Evaluacion)
         .filter(Evaluacion.activo_id == activo_id)
@@ -196,7 +196,7 @@ def listar_todas_las_evaluaciones(
     pagina: Optional[int] = Query(default=None, ge=1, description="Número de página (desde 1). Sin este parámetro se devuelve todo."),
     por_pagina: int = Query(default=50, ge=1, le=200, description="Evaluaciones por página; solo se usa junto con `pagina`"),
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """
     Evaluaciones visibles para el usuario, de la más reciente a la más antigua.
@@ -207,12 +207,12 @@ def listar_todas_las_evaluaciones(
     Con `pagina` (y opcionalmente `por_pagina`) la respuesta se entrega por páginas y el total
     de evaluaciones que cumplen el filtro viaja en la cabecera `X-Total-Count`.
     """
-    ids = _ids_de_proyectos_visibles(db, user)
+    ids = _ids_de_proyectos_visibles(db, usuario)
     if not ids:
         if pagina is not None:
             response.headers["X-Total-Count"] = "0"
         return []
-    q = (
+    consulta = (
         db.query(Evaluacion)
         .join(Activo, Activo.id == Evaluacion.activo_id)
         .filter(Activo.proyecto_id.in_(ids))
@@ -227,21 +227,21 @@ def listar_todas_las_evaluaciones(
             .filter(Activo.proyecto_id.in_(ids))
             .subquery()
         )
-        q = q.filter(Evaluacion.id.in_(db.query(ranking.c.id).filter(ranking.c.rn <= ultimas)))
-    q = q.order_by(Evaluacion.iniciada_en.desc(), Evaluacion.id)  # el id desempata para que las páginas sean estables
+        consulta = consulta.filter(Evaluacion.id.in_(db.query(ranking.c.id).filter(ranking.c.rn <= ultimas)))
+    consulta = consulta.order_by(Evaluacion.iniciada_en.desc(), Evaluacion.id)  # el id desempata para que las páginas sean estables
     if pagina is not None:
-        response.headers["X-Total-Count"] = str(q.order_by(None).count())
-        q = q.offset((pagina - 1) * por_pagina).limit(por_pagina)
-    return q.options(selectinload(Evaluacion.hallazgos)).all()  # una consulta para todos los hallazgos (evita N+1)
+        response.headers["X-Total-Count"] = str(consulta.order_by(None).count())
+        consulta = consulta.offset((pagina - 1) * por_pagina).limit(por_pagina)
+    return consulta.options(selectinload(Evaluacion.hallazgos)).all()  # una consulta para todos los hallazgos (evita N+1)
 
 
 @router.get("/evaluaciones/{evaluacion_id}", response_model=EvaluacionOut)
 def obtener_evaluacion(
     evaluacion_id: str,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, usuario)
     return evaluacion
 
 
@@ -249,13 +249,13 @@ def obtener_evaluacion(
 def cancelar_evaluacion(
     evaluacion_id: str,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """
     Cancela una evaluación pendiente o en curso. Queda registrada como fallida con la etapa
     "Cancelada"; el proceso de fondo detiene Nmap/ZAP y descarta los resultados parciales.
     """
-    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, usuario)
     if evaluacion.estado not in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
         raise HTTPException(status_code=409, detail="La evaluación ya terminó; no hay nada que cancelar.")
     evaluacion.estado = EstadoEvaluacion.FALLIDA
@@ -271,10 +271,10 @@ def cancelar_evaluacion(
 def eliminar_evaluacion(
     evaluacion_id: str,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """Elimina una evaluación y sus hallazgos. Si está en curso hay que cancelarla primero."""
-    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, user)
+    evaluacion = _get_evaluacion_or_404(db, evaluacion_id, usuario)
     if evaluacion.estado in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
         raise HTTPException(status_code=409, detail="La evaluación está en curso: cancélala antes de eliminarla.")
     db.delete(evaluacion)  # los hallazgos se eliminan en cascada
@@ -285,17 +285,17 @@ def eliminar_evaluacion(
 @router.patch("/hallazgos/{hallazgo_id}", response_model=HallazgoOut)
 def actualizar_hallazgo(
     hallazgo_id: str,
-    data: HallazgoUpdate,
+    datos: HallazgoUpdate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     """Marca un hallazgo como corregido ("si") o lo reabre ("no")."""
     hallazgo = db.query(Hallazgo).filter(Hallazgo.id == hallazgo_id).first()
     if not hallazgo:
         raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
     evaluacion = db.query(Evaluacion).filter(Evaluacion.id == hallazgo.evaluacion_id).first()
-    _get_activo_or_404(db, evaluacion.activo_id, user)  # misma verificación de propiedad
-    hallazgo.corregido = data.corregido
+    _get_activo_or_404(db, evaluacion.activo_id, usuario)  # misma verificación de propiedad
+    hallazgo.corregido = datos.corregido
     db.commit()
     db.refresh(hallazgo)
     return hallazgo

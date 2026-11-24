@@ -6,22 +6,22 @@ export const useToast = () => useContext(ToastCtx);
 
 export function ToastProvider({ children }) {
   const [items, setItems] = useState([]);
-  const n = useRef(0);
+  const contador = useRef(0);
 
-  const cerrar = useCallback((id) => setItems((xs) => xs.filter((x) => x.id !== id)), []);
+  const cerrar = useCallback((id) => setItems((itemsActuales) => itemsActuales.filter((item) => item.id !== id)), []);
   const toast = useCallback(
     (tipo, titulo, texto) => {
-      const id = ++n.current;
-      setItems((xs) => [...xs.slice(-3), { id, tipo, titulo, texto }]);
+      const id = ++contador.current;
+      setItems((itemsActuales) => [...itemsActuales.slice(-3), { id, tipo, titulo, texto }]);
       setTimeout(() => cerrar(id), tipo === "error" ? 7000 : 4500);
     },
     [cerrar]
   );
   const api = useMemo(
     () => ({
-      ok: (t, x) => toast("ok", t, x),
-      error: (t, x) => toast("error", t, x),
-      info: (t, x) => toast("info", t, x),
+      ok: (titulo, texto) => toast("ok", titulo, texto),
+      error: (titulo, texto) => toast("error", titulo, texto),
+      info: (titulo, texto) => toast("info", titulo, texto),
     }),
     [toast]
   );
@@ -30,14 +30,14 @@ export function ToastProvider({ children }) {
     <ToastCtx.Provider value={api}>
       {children}
       <div className="toasts" role="status" aria-live="polite">
-        {items.map((t) => (
-          <div key={t.id} className={`toast toast-${t.tipo}`}>
-            <Icon name={t.tipo === "error" ? "alert" : t.tipo === "ok" ? "check-circle" : "info"} size={18} />
+        {items.map((item) => (
+          <div key={item.id} className={`toast toast-${item.tipo}`}>
+            <Icon name={item.tipo === "error" ? "alert" : item.tipo === "ok" ? "check-circle" : "info"} size={18} />
             <div>
-              <strong>{t.titulo}</strong>
-              {t.texto && <p>{t.texto}</p>}
+              <strong>{item.titulo}</strong>
+              {item.texto && <p>{item.texto}</p>}
             </div>
-            <button className="toast-x" onClick={() => cerrar(t.id)} aria-label="Cerrar aviso">
+            <button className="toast-x" onClick={() => cerrar(item.id)} aria-label="Cerrar aviso">
               <Icon name="x" size={14} />
             </button>
           </div>

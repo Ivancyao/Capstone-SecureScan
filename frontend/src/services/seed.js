@@ -3,51 +3,51 @@ import { hallazgoDesdePuerto, hallazgoWeb } from "../lib/risk.js";
 
 const DIA = 86400000;
 const hace = (dias, horas = 0) => new Date(Date.now() - dias * DIA - horas * 3600000).toISOString();
-const P = (puerto, servicio, producto = "", version = "") => ({ puerto, servicio, producto, version });
+const crearPuerto = (puerto, servicio, producto = "", version = "") => ({ puerto, servicio, producto, version });
 
 // Perfil de cada activo: qué puertos tiene abiertos hoy (usado también por los escaneos simulados).
 const PERFILES = {
-  a1: { puertos: [P(3000, "http", "Node.js Express framework")], web: ["csp", "xss", "sqli"] },
-  a2: { puertos: [P(22, "ssh", "OpenSSH", "5.9p1"), P(80, "http", "Apache httpd", "2.4.7"), P(3306, "mysql", "MySQL", "5.5.62")], web: ["csrf", "version_servidor", "sqli"] },
-  a3: { puertos: [P(21, "ftp", "vsftpd", "2.3.4"), P(22, "ssh", "OpenSSH", "7.4"), P(445, "microsoft-ds", "Samba smbd", "3.0.20")], web: [] },
-  a4: { puertos: [P(22, "ssh", "OpenSSH", "9.2p1"), P(443, "https", "nginx", "1.24.0")], web: [] },
-  a5: { puertos: [P(5432, "postgresql", "PostgreSQL DB", "14.9"), P(6379, "redis", "Redis key-value store", "6.2.6"), P(8080, "http-proxy", "Gunicorn")], web: ["cors"] },
-  a6: { puertos: [P(80, "http", "nginx", "1.18.0"), P(443, "https", "nginx", "1.18.0"), P(3306, "mysql", "MariaDB", "10.3"), P(3389, "ms-wbt-server", "Microsoft Terminal Services")], web: ["hsts"] },
+  a1: { puertos: [crearPuerto(3000, "http", "Node.js Express framework")], web: ["csp", "xss", "sqli"] },
+  a2: { puertos: [crearPuerto(22, "ssh", "OpenSSH", "5.9p1"), crearPuerto(80, "http", "Apache httpd", "2.4.7"), crearPuerto(3306, "mysql", "MySQL", "5.5.62")], web: ["csrf", "version_servidor", "sqli"] },
+  a3: { puertos: [crearPuerto(21, "ftp", "vsftpd", "2.3.4"), crearPuerto(22, "ssh", "OpenSSH", "7.4"), crearPuerto(445, "microsoft-ds", "Samba smbd", "3.0.20")], web: [] },
+  a4: { puertos: [crearPuerto(22, "ssh", "OpenSSH", "9.2p1"), crearPuerto(443, "https", "nginx", "1.24.0")], web: [] },
+  a5: { puertos: [crearPuerto(5432, "postgresql", "PostgreSQL DB", "14.9"), crearPuerto(6379, "redis", "Redis key-value store", "6.2.6"), crearPuerto(8080, "http-proxy", "Gunicorn")], web: ["cors"] },
+  a6: { puertos: [crearPuerto(80, "http", "nginx", "1.18.0"), crearPuerto(443, "https", "nginx", "1.18.0"), crearPuerto(3306, "mysql", "MariaDB", "10.3"), crearPuerto(3389, "ms-wbt-server", "Microsoft Terminal Services")], web: ["hsts"] },
 };
 
 // Cada elemento describe una evaluación histórica.
 const EVALS = [
-  { id: "e1", a: "a1", dias: 34, dur: 14, puertos: [P(3000, "http", "Node.js Express framework")], web: ["csp"] },
-  { id: "e2", a: "a1", dias: 15, dur: 21, puertos: [P(3000, "http", "Node.js Express framework")], web: ["csp", "xss", "sqli"] },
+  { id: "e1", a: "a1", dias: 34, dur: 14, puertos: [crearPuerto(3000, "http", "Node.js Express framework")], web: ["csp"] },
+  { id: "e2", a: "a1", dias: 15, dur: 21, puertos: [crearPuerto(3000, "http", "Node.js Express framework")], web: ["csp", "xss", "sqli"] },
   { id: "e3", a: "a1", dias: 2, dur: 19, puertos: PERFILES.a1.puertos, web: PERFILES.a1.web },
   { id: "e4", a: "a2", dias: 28, dur: 26, puertos: PERFILES.a2.puertos, web: ["csrf", "version_servidor"] },
   { id: "e5", a: "a2", dias: 9, dur: 31, puertos: PERFILES.a2.puertos, web: PERFILES.a2.web },
-  { id: "e6", a: "a3", dias: 21, dur: 17, puertos: [P(21, "ftp", "vsftpd", "2.3.4"), P(22, "ssh", "OpenSSH", "7.4"), P(23, "telnet", "Linux telnetd"), P(445, "microsoft-ds", "Samba smbd", "3.0.20")], web: [] },
+  { id: "e6", a: "a3", dias: 21, dur: 17, puertos: [crearPuerto(21, "ftp", "vsftpd", "2.3.4"), crearPuerto(22, "ssh", "OpenSSH", "7.4"), crearPuerto(23, "telnet", "Linux telnetd"), crearPuerto(445, "microsoft-ds", "Samba smbd", "3.0.20")], web: [] },
   { id: "e7", a: "a3", dias: 6, dur: 15, puertos: PERFILES.a3.puertos, web: [], corregidos: ["Servicio SSH expuesto"] },
-  { id: "e8", a: "a4", dias: 12, dur: 11, puertos: [P(22, "ssh", "OpenSSH", "9.2p1"), P(80, "http", "nginx", "1.18.0"), P(443, "https", "nginx", "1.18.0")], web: ["hsts"] },
+  { id: "e8", a: "a4", dias: 12, dur: 11, puertos: [crearPuerto(22, "ssh", "OpenSSH", "9.2p1"), crearPuerto(80, "http", "nginx", "1.18.0"), crearPuerto(443, "https", "nginx", "1.18.0")], web: ["hsts"] },
   { id: "e9", a: "a4", dias: 1, dur: 9, puertos: PERFILES.a4.puertos, web: [] },
   { id: "e10", a: "a5", dias: 4, dur: 24, puertos: PERFILES.a5.puertos, web: PERFILES.a5.web },
   { id: "e11", a: "a6", dias: 18, dur: 22, puertos: PERFILES.a6.puertos, web: PERFILES.a6.web },
   { id: "e12", a: "a6", dias: 3, dur: 300, fallida: "Tiempo de espera agotado (300 s): el objetivo no respondió al escaneo. Verifique que el servicio esté encendido y accesible desde la red de SecureScan.", puertos: [], web: [] },
 ];
 
-function construirEvaluacion(e, idx) {
-  const inicio = hace(e.dias, 2 + (idx % 5));
-  const fin = new Date(new Date(inicio).getTime() + e.dur * 1000).toISOString();
+function construirEvaluacion(definicion, idx) {
+  const inicio = hace(definicion.dias, 2 + (idx % 5));
+  const fin = new Date(new Date(inicio).getTime() + definicion.dur * 1000).toISOString();
   const base = {
-    id: e.id,
-    activo_id: e.a,
+    id: definicion.id,
+    activo_id: definicion.a,
     iniciada_en: inicio,
     finalizada_en: fin,
   };
-  if (e.fallida) {
-    return { ...base, estado: "fallida", detalle_error: e.fallida, hallazgos: [] };
+  if (definicion.fallida) {
+    return { ...base, estado: "fallida", detalle_error: definicion.fallida, hallazgos: [] };
   }
-  const hallazgos = [...e.puertos.map(hallazgoDesdePuerto), ...(e.web || []).map(hallazgoWeb)].map((h, i) => ({
-    ...h,
-    id: `${e.id}-h${i + 1}`,
-    evaluacion_id: e.id,
-    corregido: (e.corregidos || []).includes(h.nombre_vulnerabilidad) ? "si" : "no",
+  const hallazgos = [...definicion.puertos.map(hallazgoDesdePuerto), ...(definicion.web || []).map(hallazgoWeb)].map((hallazgo, indice) => ({
+    ...hallazgo,
+    id: `${definicion.id}-h${indice + 1}`,
+    evaluacion_id: definicion.id,
+    corregido: (definicion.corregidos || []).includes(hallazgo.nombre_vulnerabilidad) ? "si" : "no",
   }));
   return { ...base, estado: "completada", detalle_error: null, hallazgos };
 }
@@ -88,7 +88,7 @@ export function construirSeed() {
       },
       alcance: {
         permitir_publicas: false,
-        rangos: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16"],
+        rangos: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"],
       },
       retencion_dias: 365,
     },

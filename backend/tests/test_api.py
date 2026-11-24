@@ -71,9 +71,9 @@ def test_password_se_guarda_hasheada():
 
     registrar()
     db = SessionLocal()
-    user = db.query(Usuario).first()
-    assert user.password_hash != "Password123"
-    assert user.password_hash.startswith("$2")  # prefijo bcrypt
+    usuario = db.query(Usuario).first()
+    assert usuario.password_hash != "Password123"
+    assert usuario.password_hash.startswith("$2")  # prefijo bcrypt
     db.close()
 
 

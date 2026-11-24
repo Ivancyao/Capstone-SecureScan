@@ -13,41 +13,41 @@ export function Hallazgos() {
   useTitulo("Hallazgos");
   const { data } = useData();
   const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState(params.get("q") || "");
-  const [sevs, setSevs] = useState(() => (params.get("sev") || "").split(",").filter((s) => SEVERIDADES.includes(s)));
-  const [herr, setHerr] = useState("");
+  const [busqueda, setBusqueda] = useState(params.get("q") || "");
+  const [severidades, setSeveridades] = useState(() => (params.get("sev") || "").split(",").filter((severidad) => SEVERIDADES.includes(severidad)));
+  const [herramienta, setHerramienta] = useState("");
   const [owasp, setOwasp] = useState("");
   const [estado, setEstado] = useState("abiertos");
   const [historico, setHistorico] = useState(false);
   const [orden, setOrden] = useState("severidad");
 
-  const base = data.hallazgos.filter((h) => historico || h.vigente);
-  const porSev = Object.fromEntries(SEVERIDADES.map((s) => [s, base.filter((h) => h.severidad === s).length]));
+  const base = data.hallazgos.filter((hallazgo) => historico || hallazgo.vigente);
+  const porSev = Object.fromEntries(SEVERIDADES.map((severidad) => [severidad, base.filter((hallazgo) => hallazgo.severidad === severidad).length]));
 
   const lista = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    const r = base.filter(
-      (h) =>
-        (!t || `${h.nombre_vulnerabilidad} ${h.evidencia} ${h.activo?.nombre} ${h.categoria_owasp}`.toLowerCase().includes(t)) &&
-        (!sevs.length || sevs.includes(h.severidad)) &&
-        (!herr || h.herramienta_origen === herr) &&
-        (!owasp || owaspCodigo(h.categoria_owasp) === owasp) &&
-        (estado === "todos" || (estado === "abiertos" ? h.corregido !== "si" : h.corregido === "si"))
+    const texto = busqueda.trim().toLowerCase();
+    const resultado = base.filter(
+      (hallazgo) =>
+        (!texto || `${hallazgo.nombre_vulnerabilidad} ${hallazgo.evidencia} ${hallazgo.activo?.nombre} ${hallazgo.categoria_owasp}`.toLowerCase().includes(texto)) &&
+        (!severidades.length || severidades.includes(hallazgo.severidad)) &&
+        (!herramienta || hallazgo.herramienta_origen === herramienta) &&
+        (!owasp || owaspCodigo(hallazgo.categoria_owasp) === owasp) &&
+        (estado === "todos" || (estado === "abiertos" ? hallazgo.corregido !== "si" : hallazgo.corregido === "si"))
     );
-    return r.sort((a, b) => {
-      if (orden === "cvss") return (b.cvss_score ?? 0) - (a.cvss_score ?? 0);
-      if (orden === "fecha") return new Date(b.fecha) - new Date(a.fecha);
-      return ordenSev(a.severidad) - ordenSev(b.severidad) || (b.cvss_score ?? 0) - (a.cvss_score ?? 0);
+    return resultado.sort((primero, segundo) => {
+      if (orden === "cvss") return (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0);
+      if (orden === "fecha") return new Date(segundo.fecha) - new Date(primero.fecha);
+      return ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0);
     });
-  }, [base, q, sevs, herr, owasp, estado, orden]);
+  }, [base, busqueda, severidades, herramienta, owasp, estado, orden]);
 
-  const hayFiltros = q || sevs.length || herr || owasp || estado !== "abiertos" || historico;
+  const hayFiltros = busqueda || severidades.length || herramienta || owasp || estado !== "abiertos" || historico;
   const limpiar = () => {
-    setQ(""); setSevs([]); setHerr(""); setOwasp(""); setEstado("abiertos"); setHistorico(false);
+    setBusqueda(""); setSeveridades([]); setHerramienta(""); setOwasp(""); setEstado("abiertos"); setHistorico(false);
     if (params.get("q")) setParams({}, { replace: true });
   };
-  const alternarSev = (s) => setSevs((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s]));
-  const categorias = [...new Set(data.hallazgos.map((h) => owaspCodigo(h.categoria_owasp)))].sort();
+  const alternarSev = (severidad) => setSeveridades((seleccionadas) => (seleccionadas.includes(severidad) ? seleccionadas.filter((otra) => otra !== severidad) : [...seleccionadas, severidad]));
+  const categorias = [...new Set(data.hallazgos.map((hallazgo) => owaspCodigo(hallazgo.categoria_owasp)))].sort();
 
   return (
     <>
@@ -62,32 +62,32 @@ export function Hallazgos() {
             <div className="filtros">
               <div className="search-inline">
                 <Icon name="search" size={16} />
-                <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, puerto o activo" aria-label="Buscar hallazgos" />
+                <input className="input" type="search" value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} placeholder="Buscar por nombre, puerto o activo" aria-label="Buscar hallazgos" />
               </div>
               <div className="chips" role="group" aria-label="Filtrar por severidad">
-                {SEVERIDADES.map((s) => (
-                  <button key={s} type="button" className="chip" aria-pressed={sevs.includes(s)} onClick={() => alternarSev(s)}>
-                    <SevMark sev={s} /> {SEV[s].label} <span className="n num">{porSev[s]}</span>
+                {SEVERIDADES.map((severidad) => (
+                  <button key={severidad} type="button" className="chip" aria-pressed={severidades.includes(severidad)} onClick={() => alternarSev(severidad)}>
+                    <SevMark sev={severidad} /> {SEV[severidad].label} <span className="n num">{porSev[severidad]}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div className="filtros">
               <Segmented etiqueta="Estado" valor={estado} onChange={setEstado} opciones={[{ valor: "abiertos", etiqueta: "Abiertos" }, { valor: "corregidos", etiqueta: "Corregidos" }, { valor: "todos", etiqueta: "Todos" }]} />
-              <select className="select" value={herr} onChange={(e) => setHerr(e.target.value)} aria-label="Herramienta">
+              <select className="select" value={herramienta} onChange={(evento) => setHerramienta(evento.target.value)} aria-label="Herramienta">
                 <option value="">Cualquier herramienta</option>
-                {Object.entries(HERRAMIENTAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(HERRAMIENTAS).map(([herramienta, nombre]) => <option key={herramienta} value={herramienta}>{nombre}</option>)}
               </select>
-              <select className="select" value={owasp} onChange={(e) => setOwasp(e.target.value)} aria-label="Categoría OWASP">
+              <select className="select" value={owasp} onChange={(evento) => setOwasp(evento.target.value)} aria-label="Categoría OWASP">
                 <option value="">Cualquier categoría OWASP</option>
-                {categorias.map((c) => <option key={c} value={c}>{c} {OWASP[c]}</option>)}
+                {categorias.map((categoria) => <option key={categoria} value={categoria}>{categoria} {OWASP[categoria]}</option>)}
               </select>
-              <select className="select" value={orden} onChange={(e) => setOrden(e.target.value)} aria-label="Ordenar por">
+              <select className="select" value={orden} onChange={(evento) => setOrden(evento.target.value)} aria-label="Ordenar por">
                 <option value="severidad">Orden: severidad</option>
                 <option value="cvss">Orden: CVSS</option>
                 <option value="fecha">Orden: más recientes</option>
               </select>
-              <label className="check"><input type="checkbox" checked={historico} onChange={(e) => setHistorico(e.target.checked)} /> Incluir evaluaciones anteriores</label>
+              <label className="check"><input type="checkbox" checked={historico} onChange={(evento) => setHistorico(evento.target.checked)} /> Incluir evaluaciones anteriores</label>
               {hayFiltros && <button className="btn btn-quiet btn-sm" onClick={limpiar}>Limpiar filtros</button>}
             </div>
           </div>
@@ -110,27 +110,27 @@ export function HallazgoDetalle() {
   const { id } = useParams();
   const { data, marcarCorregido } = useData();
   const toast = useToast();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const [cargando, setCargando] = useState(false);
-  const h = data.hallazgosPorId[id];
-  useTitulo(h?.nombre_vulnerabilidad || "Hallazgo");
-  if (!h) return <NoEncontrado que="El hallazgo" volver="/hallazgos" etiqueta="Ver hallazgos" />;
+  const hallazgo = data.hallazgosPorId[id];
+  useTitulo(hallazgo?.nombre_vulnerabilidad || "Hallazgo");
+  if (!hallazgo) return <NoEncontrado que="El hallazgo" volver="/hallazgos" etiqueta="Ver hallazgos" />;
 
-  const a = h.activo;
-  const corregido = h.corregido === "si";
-  const puerto = puertoDeHallazgo(h);
-  const cod = owaspCodigo(h.categoria_owasp);
+  const activo = hallazgo.activo;
+  const corregido = hallazgo.corregido === "si";
+  const puerto = puertoDeHallazgo(hallazgo);
+  const codigo = owaspCodigo(hallazgo.categoria_owasp);
   // ¿En qué evaluaciones del activo aparece el mismo hallazgo?
-  const historia = (a?.evaluaciones || [])
-    .filter((e) => e.estado === "completada")
-    .map((e) => ({ e, presente: e.hallazgos.some((x) => x.nombre_vulnerabilidad === h.nombre_vulnerabilidad) }))
+  const historia = (activo?.evaluaciones || [])
+    .filter((evaluacion) => evaluacion.estado === "completada")
+    .map((evaluacion) => ({ e: evaluacion, presente: evaluacion.hallazgos.some((otro) => otro.nombre_vulnerabilidad === hallazgo.nombre_vulnerabilidad) }))
     .reverse();
-  const otros = (a?.abiertos || []).filter((x) => x.id !== h.id).sort((x, y) => ordenSev(x.severidad) - ordenSev(y.severidad)).slice(0, 4);
+  const otros = (activo?.abiertos || []).filter((otro) => otro.id !== hallazgo.id).sort((otro, segundo) => ordenSev(otro.severidad) - ordenSev(segundo.severidad)).slice(0, 4);
 
   const alternar = async () => {
     setCargando(true);
     try {
-      await marcarCorregido(h.id, !corregido);
+      await marcarCorregido(hallazgo.id, !corregido);
       toast.ok(corregido ? "Hallazgo reabierto" : "Marcado como corregido", corregido ? undefined : "Vuelve a evaluar el activo para confirmar la corrección.");
     } catch {
       /* aviso mostrado */
@@ -142,14 +142,14 @@ export function HallazgoDetalle() {
   return (
     <>
       <PageHeader
-        migas={[{ texto: "Hallazgos", to: "/hallazgos" }, { texto: h.nombre_vulnerabilidad }]}
-        titulo={h.nombre_vulnerabilidad}
+        migas={[{ texto: "Hallazgos", to: "/hallazgos" }, { texto: hallazgo.nombre_vulnerabilidad }]}
+        titulo={hallazgo.nombre_vulnerabilidad}
         descripcion={
           <span className="row ph-meta">
-            <SevBadge sev={h.severidad} />
-            <Tag>{nombreHerramienta(h.herramienta_origen)}</Tag>
+            <SevBadge sev={hallazgo.severidad} />
+            <Tag>{nombreHerramienta(hallazgo.herramienta_origen)}</Tag>
             {corregido ? <Tag tono="ok">Corregido</Tag> : <Tag>Abierto</Tag>}
-            {!h.vigente && <Tag tono="warn">De una evaluación anterior</Tag>}
+            {!hallazgo.vigente && <Tag tono="warn">De una evaluación anterior</Tag>}
           </span>
         }
         acciones={
@@ -164,30 +164,30 @@ export function HallazgoDetalle() {
         <div className="stack">
           <Panel titulo="Qué se encontró">
             <div className="stack-sm">
-              <pre className="codeblock">{h.evidencia}</pre>
+              <pre className="codeblock">{hallazgo.evidencia}</pre>
               <dl className="kv">
-                <dt>Activo</dt><dd><Link to={`/activos/${a?.id}`}>{a?.nombre}</Link> <span className="muted">· {a?.proyecto?.nombre}</span></dd>
+                <dt>Activo</dt><dd><Link to={`/activos/${activo?.id}`}>{activo?.nombre}</Link> <span className="muted">· {activo?.proyecto?.nombre}</span></dd>
                 {puerto && <><dt>Puerto</dt><dd className="num">{puerto.puerto}/{puerto.protocolo}{puerto.servicio ? ` (${puerto.servicio})` : ""}</dd></>}
-                <dt>Detectado</dt><dd>{fmtFechaHora(h.fecha)} <span className="muted">({hace(h.fecha)})</span></dd>
-                <dt>Evaluación</dt><dd><Link to={`/evaluaciones/${h.evaluacion_id}`}>Ver evaluación completa</Link></dd>
+                <dt>Detectado</dt><dd>{fmtFechaHora(hallazgo.fecha)} <span className="muted">({hace(hallazgo.fecha)})</span></dd>
+                <dt>Evaluación</dt><dd><Link to={`/evaluaciones/${hallazgo.evaluacion_id}`}>Ver evaluación completa</Link></dd>
               </dl>
             </div>
           </Panel>
 
-          <Panel titulo="Cómo corregirlo" descripcion={SEV[h.severidad].accion}>
-            <div className="prose"><p>{h.recomendacion}</p></div>
+          <Panel titulo="Cómo corregirlo" descripcion={SEV[hallazgo.severidad].accion}>
+            <div className="prose"><p>{hallazgo.recomendacion}</p></div>
             <div className="row panel-actions-top">
-              {a && <EvaluarBoton activo={a} texto="Volver a evaluar para confirmar" />}
+              {activo && <EvaluarBoton activo={activo} texto="Volver a evaluar para confirmar" />}
             </div>
           </Panel>
 
           {historia.length > 1 && (
             <Panel titulo="Presencia en evaluaciones" descripcion="Si este hallazgo seguía abierto en cada evaluación del activo">
               <ul className="historia">
-                {historia.map(({ e, presente }) => (
-                  <li key={e.id} className={presente ? "si" : "no"}>
+                {historia.map(({ e: evaluacion, presente }) => (
+                  <li key={evaluacion.id} className={presente ? "si" : "no"}>
                     <span className="historia-dot" aria-hidden="true">{presente ? <Icon name="alert" size={12} /> : <Icon name="check" size={12} />}</span>
-                    <Link to={`/evaluaciones/${e.id}`}>{fmtFecha(e.iniciada_en)}</Link>
+                    <Link to={`/evaluaciones/${evaluacion.id}`}>{fmtFecha(evaluacion.iniciada_en)}</Link>
                     <span className="muted small">{presente ? "Presente" : "No apareció"}</span>
                   </li>
                 ))}
@@ -200,34 +200,34 @@ export function HallazgoDetalle() {
           <Panel titulo="Riesgo">
             <div className="stack-sm">
               <div className="cvss-fig">
-                <span className="cvss-n">{fmtCvss(h.cvss_score)}</span>
+                <span className="cvss-n">{fmtCvss(hallazgo.cvss_score)}</span>
                 <span className="small muted">CVSS estimado, de 10</span>
               </div>
-              <CvssMeter valor={h.cvss_score} />
+              <CvssMeter valor={hallazgo.cvss_score} />
               <dl className="kv">
-                <dt>Severidad</dt><dd>{SEV[h.severidad].label} ({SEV[h.severidad].rango})</dd>
-                <dt>OWASP Top 10</dt><dd>{h.categoria_owasp || "Sin categoría"}</dd>
+                <dt>Severidad</dt><dd>{SEV[hallazgo.severidad].label} ({SEV[hallazgo.severidad].rango})</dd>
+                <dt>OWASP Top 10</dt><dd>{hallazgo.categoria_owasp || "Sin categoría"}</dd>
               </dl>
               <Aviso>El puntaje se estima por reglas según el servicio expuesto; no es un cálculo vectorial completo de CVSS.</Aviso>
-              {cod !== "—" && <Link to="/ayuda#owasp" className="small">¿Qué es {cod}?</Link>}
+              {codigo !== "—" && <Link to="/ayuda#owasp" className="small">¿Qué es {codigo}?</Link>}
             </div>
           </Panel>
 
           {otros.length > 0 && (
             <Panel titulo="Otros hallazgos de este activo" flush>
               <ul className="rows">
-                {otros.map((x) => (
-                  <li key={x.id} className="clic" onClick={() => nav(`/hallazgos/${x.id}`)}>
+                {otros.map((otro) => (
+                  <li key={otro.id} className="clic" onClick={() => navegar(`/hallazgos/${otro.id}`)}>
                     <div className="grow">
-                      <Link to={`/hallazgos/${x.id}`} className="titulo" onClick={(e) => e.stopPropagation()}>{x.nombre_vulnerabilidad}</Link>
+                      <Link to={`/hallazgos/${otro.id}`} className="titulo" onClick={(evento) => evento.stopPropagation()}>{otro.nombre_vulnerabilidad}</Link>
                     </div>
-                    <SevBadge sev={x.severidad} />
+                    <SevBadge sev={otro.severidad} />
                   </li>
                 ))}
               </ul>
             </Panel>
           )}
-          <CopiarBoton texto={`${h.nombre_vulnerabilidad} — ${h.evidencia}`} etiqueta="Copiar resumen" />
+          <CopiarBoton texto={`${hallazgo.nombre_vulnerabilidad} — ${hallazgo.evidencia}`} etiqueta="Copiar resumen" />
         </div>
       </div>
     </>

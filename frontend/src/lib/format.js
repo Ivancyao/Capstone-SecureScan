@@ -7,8 +7,8 @@ const corta = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short" 
 // Si el texto ya trae zona ("Z" o "+00:00"), se respeta tal cual.
 export const aFecha = (iso) => {
   if (iso instanceof Date) return iso;
-  const t = String(iso);
-  return new Date(/(Z|[+-]\d{2}:?\d{2})$/i.test(t) || !t.includes("T") ? t : t + "Z");
+  const texto = String(iso);
+  return new Date(/(Z|[+-]\d{2}:?\d{2})$/i.test(texto) || !texto.includes("T") ? texto : texto + "Z");
 };
 
 export const fmtFecha = (iso) => (iso ? fecha.format(aFecha(iso)) : "—");
@@ -17,30 +17,30 @@ export const fmtFechaCorta = (iso) => (iso ? corta.format(aFecha(iso)) : "—");
 
 export function hace(iso) {
   if (!iso) return "—";
-  const s = Math.max(0, (Date.now() - aFecha(iso).getTime()) / 1000);
-  if (s < 60) return "hace un momento";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `hace ${m} min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `hace ${h} h`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return d === 1 ? "hace 1 día" : `hace ${d} días`;
-  const mes = Math.floor(d / 30);
+  const segundos = Math.max(0, (Date.now() - aFecha(iso).getTime()) / 1000);
+  if (segundos < 60) return "hace un momento";
+  const minutos = Math.floor(segundos / 60);
+  if (minutos < 60) return `hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `hace ${horas} h`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 30) return dias === 1 ? "hace 1 día" : `hace ${dias} días`;
+  const mes = Math.floor(dias / 30);
   return mes === 1 ? "hace 1 mes" : `hace ${mes} meses`;
 }
 
 export function fmtDuracion(inicio, fin) {
   if (!inicio || !fin) return "—";
-  const s = Math.round((aFecha(fin) - aFecha(inicio)) / 1000);
-  if (s < 60) return `${s} s`;
-  return `${Math.floor(s / 60)} min ${s % 60} s`;
+  const segundos = Math.round((aFecha(fin) - aFecha(inicio)) / 1000);
+  if (segundos < 60) return `${segundos} s`;
+  return `${Math.floor(segundos / 60)} min ${segundos % 60} s`;
 }
 
-export const fmtCvss = (n) => (n == null ? "—" : Number(n).toFixed(1).replace(".", ","));
-export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+export const fmtCvss = (numero) => (numero == null ? "—" : Number(numero).toFixed(1).replace(".", ","));
+export const plural = (cantidad, uno, varios) => `${cantidad} ${cantidad === 1 ? uno : varios}`;
 export const iniciales = (nombre = "") =>
-  nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("");
-export const fmtKb = (kb) => (kb >= 1024 ? `${(kb / 1024).toFixed(1).replace(".", ",")} MB` : `${kb} KB`);
+  nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((palabra) => palabra[0].toUpperCase()).join("");
+export const fmtKb = (kilobytes) => (kilobytes >= 1024 ? `${(kilobytes / 1024).toFixed(1).replace(".", ",")} MB` : `${kilobytes} KB`);
 
 // Host de una URL de activo, tolerando entradas sin esquema ("10.0.0.5", "dvwa.lab.local").
 export function hostDe(url = "") {
@@ -60,10 +60,10 @@ export function uid() {
 }
 
 // ¿El host está en un rango que SecureScan permite escanear? (mismo criterio que el backend)
-export function esHostPrivado(h = "") {
-  if (!h) return false;
-  if (h === "localhost") return true;
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(h) || !h.includes(".");
-  const [a, b] = h.split(".").map(Number);
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+export function esHostPrivado(host = "") {
+  if (!host) return false;
+  if (host === "localhost") return true;
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(host) || !host.includes(".");
+  const [primerOcteto, segundoOcteto] = host.split(".").map(Number);
+  return primerOcteto === 10 || primerOcteto === 127 || (primerOcteto === 172 && segundoOcteto >= 16 && segundoOcteto <= 31) || (primerOcteto === 192 && segundoOcteto === 168) || (primerOcteto === 169 && segundoOcteto === 254);
 }

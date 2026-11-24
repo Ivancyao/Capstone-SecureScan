@@ -147,8 +147,8 @@ class ReporteOut(BaseModel):
 
     @field_validator("evaluacion_ids", mode="before")
     @classmethod
-    def _lista(cls, v):
-        return v or []
+    def _lista(cls, lista):
+        return lista or []
 
 
 # ---------- Configuración ----------
@@ -195,11 +195,11 @@ class AnalisisUrlIn(BaseModel):
 
     @field_validator("url")
     @classmethod
-    def _http(cls, v: str) -> str:
-        v = v.strip()
-        if not v.lower().startswith(("http://", "https://")):
+    def _http(cls, url: str) -> str:
+        url = url.strip()
+        if not url.lower().startswith(("http://", "https://")):
             raise ValueError("La URL debe empezar con http:// o https://")
-        return v
+        return url
 
 
 class AnalisisOut(BaseModel):

@@ -11,9 +11,9 @@ export const SEV = {
   informativa: { label: "Informativa", rango: "0,0", accion: "Revisar, sin riesgo directo" },
 };
 
-export const ordenSev = (s) => {
-  const i = SEVERIDADES.indexOf(s);
-  return i === -1 ? 99 : i;
+export const ordenSev = (severidad) => {
+  const posicion = SEVERIDADES.indexOf(severidad);
+  return posicion === -1 ? 99 : posicion;
 };
 
 // Bandas oficiales de CVSS v3.1 (igual que el backend).
@@ -75,50 +75,50 @@ const DB_PUERTOS = {
 };
 
 export function reglaPuerto(puerto, servicio) {
-  const s = (servicio || "").toLowerCase();
-  if (puerto === 23 || s === "telnet")
+  const nombreServicio = (servicio || "").toLowerCase();
+  if (puerto === 23 || nombreServicio === "telnet")
     return { nombre: "Telnet expuesto (credenciales sin cifrar)", owasp: A02, cvss: 7.5, rec: "Deshabilitar Telnet y reemplazarlo por SSH con autenticación por llave." };
-  if (puerto === 21 || s === "ftp")
+  if (puerto === 21 || nombreServicio === "ftp")
     return { nombre: "FTP expuesto (tráfico sin cifrar)", owasp: A02, cvss: 5.3, rec: "Reemplazar FTP por SFTP o FTPS y restringir el acceso por IP." };
-  if (puerto === 139 || puerto === 445 || s === "microsoft-ds" || s === "netbios-ssn")
+  if (puerto === 139 || puerto === 445 || nombreServicio === "microsoft-ds" || nombreServicio === "netbios-ssn")
     return { nombre: "SMB/NetBIOS expuesto", owasp: A05, cvss: 7.5, rec: "No exponer SMB fuera de la red interna; aplicar reglas de firewall." };
-  if (puerto === 3389 || s === "ms-wbt-server")
+  if (puerto === 3389 || nombreServicio === "ms-wbt-server")
     return { nombre: "Escritorio remoto (RDP) expuesto", owasp: A05, cvss: 7.5, rec: "Restringir RDP mediante VPN o lista de IP permitidas y exigir MFA." };
   if (DB_PUERTOS[puerto])
     return { nombre: `Base de datos expuesta (${DB_PUERTOS[puerto]})`, owasp: A05, cvss: 7.5, rec: "Las bases de datos no deben ser accesibles desde la red; limitar a la capa de aplicación." };
-  if (puerto === 22 || s === "ssh")
+  if (puerto === 22 || nombreServicio === "ssh")
     return { nombre: "Servicio SSH expuesto", owasp: A05, cvss: 3.7, rec: "Deshabilitar login por contraseña, usar llaves y limitar IPs de origen." };
-  if (puerto === 5900 || s === "vnc")
+  if (puerto === 5900 || nombreServicio === "vnc")
     return { nombre: "VNC expuesto", owasp: A05, cvss: 7.5, rec: "No exponer VNC directamente; usar túnel SSH o VPN." };
-  if (s.startsWith("http") && !s.includes("ssl") && !s.includes("https"))
+  if (nombreServicio.startsWith("http") && !nombreServicio.includes("ssl") && !nombreServicio.includes("https"))
     return { nombre: "Servicio HTTP expuesto sin cifrado", owasp: A05, cvss: 5.3, rec: "Configurar HTTPS (TLS), redirigir HTTP a HTTPS y restringir servicios innecesarios." };
-  if (s.includes("https") || s.includes("ssl"))
+  if (nombreServicio.includes("https") || nombreServicio.includes("ssl"))
     return { nombre: "Servicio HTTPS expuesto", owasp: A05, cvss: 0.0, rec: "Verificar la configuración TLS (versiones y cifrados vigentes) y renovar certificados a tiempo." };
   return { nombre: `Puerto ${puerto}/tcp abierto (${servicio})`, owasp: A05, cvss: 0.0, rec: "Confirmar que el servicio es necesario; si no lo es, cerrar el puerto." };
 }
 
 // Convierte un puerto abierto en los campos de un hallazgo (como clasificar_puerto del backend).
-export function hallazgoDesdePuerto(p) {
-  const r = reglaPuerto(p.puerto, p.servicio);
-  const detalle = [p.producto, p.version].filter(Boolean).join(" ");
-  let evidencia = `Puerto ${p.puerto}/tcp abierto — servicio: ${p.servicio}`;
+export function hallazgoDesdePuerto(puertoAbierto) {
+  const regla = reglaPuerto(puertoAbierto.puerto, puertoAbierto.servicio);
+  const detalle = [puertoAbierto.producto, puertoAbierto.version].filter(Boolean).join(" ");
+  let evidencia = `Puerto ${puertoAbierto.puerto}/tcp abierto — servicio: ${puertoAbierto.servicio}`;
   if (detalle) evidencia += ` (${detalle})`;
   return {
-    nombre_vulnerabilidad: r.nombre,
-    categoria_owasp: r.owasp,
-    cvss_score: r.cvss,
-    severidad: sevDesdeCvss(r.cvss),
+    nombre_vulnerabilidad: regla.nombre,
+    categoria_owasp: regla.owasp,
+    cvss_score: regla.cvss,
+    severidad: sevDesdeCvss(regla.cvss),
     evidencia,
-    recomendacion: r.rec,
+    recomendacion: regla.rec,
     herramienta_origen: "nmap",
   };
 }
 
 // Extrae puerto y servicio desde la evidencia (formato del backend).
-export function puertoDeHallazgo(h) {
-  const m = /Puerto (\d+)\/(tcp|udp) abierto(?: — servicio: ([^\s(]+))?/.exec(h?.evidencia || "");
-  if (!m) return null;
-  return { puerto: Number(m[1]), protocolo: m[2], servicio: m[3] || "" };
+export function puertoDeHallazgo(hallazgo) {
+  const coincidencia = /Puerto (\d+)\/(tcp|udp) abierto(?: — servicio: ([^\s(]+))?/.exec(hallazgo?.evidencia || "");
+  if (!coincidencia) return null;
+  return { puerto: Number(coincidencia[1]), protocolo: coincidencia[2], servicio: coincidencia[3] || "" };
 }
 
 // Puertos de interés que el mapa muestra siempre (abiertos o cerrados).
@@ -142,32 +142,32 @@ export const CATALOGO_WEB = {
 };
 
 export function hallazgoWeb(clave) {
-  const c = CATALOGO_WEB[clave];
+  const entrada = CATALOGO_WEB[clave];
   return {
-    nombre_vulnerabilidad: c.nombre,
-    categoria_owasp: c.owasp,
-    cvss_score: c.cvss,
-    severidad: sevDesdeCvss(c.cvss),
-    evidencia: c.evidencia,
-    recomendacion: c.rec,
+    nombre_vulnerabilidad: entrada.nombre,
+    categoria_owasp: entrada.owasp,
+    cvss_score: entrada.cvss,
+    severidad: sevDesdeCvss(entrada.cvss),
+    evidencia: entrada.evidencia,
+    recomendacion: entrada.rec,
     herramienta_origen: "owasp_zap",
   };
 }
 
 // Conteo por severidad de una lista de hallazgos.
 export function contar(hallazgos = []) {
-  const c = { critica: 0, alta: 0, media: 0, baja: 0, informativa: 0, total: 0 };
-  hallazgos.forEach((h) => {
-    if (c[h.severidad] !== undefined) c[h.severidad] += 1;
-    c.total += 1;
+  const conteo = { critica: 0, alta: 0, media: 0, baja: 0, informativa: 0, total: 0 };
+  hallazgos.forEach((hallazgo) => {
+    if (conteo[hallazgo.severidad] !== undefined) conteo[hallazgo.severidad] += 1;
+    conteo.total += 1;
   });
-  return c;
+  return conteo;
 }
 
 export function maxSeveridad(hallazgos = []) {
   let best = null;
-  hallazgos.forEach((h) => {
-    if (best === null || ordenSev(h.severidad) < ordenSev(best)) best = h.severidad;
+  hallazgos.forEach((hallazgo) => {
+    if (best === null || ordenSev(hallazgo.severidad) < ordenSev(best)) best = hallazgo.severidad;
   });
   return best;
 }

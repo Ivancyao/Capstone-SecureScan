@@ -17,7 +17,7 @@ def agregar_columnas_faltantes(engine) -> list:
         for tabla in Base.metadata.sorted_tables:
             if tabla.name not in tablas:
                 continue  # create_all la crea completa
-            existentes = {c["name"] for c in insp.get_columns(tabla.name)}
+            existentes = {columna["name"] for columna in insp.get_columns(tabla.name)}
             for col in tabla.columns:
                 if col.name in existentes:
                     continue

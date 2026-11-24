@@ -2,16 +2,16 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const TOKEN = "token";
 
-export const getToken = () => {
+const getToken = () => {
   try {
     return localStorage.getItem(TOKEN);
   } catch {
     return null;
   }
 };
-const setToken = (t) => {
+const setToken = (token) => {
   try {
-    localStorage.setItem(TOKEN, t);
+    localStorage.setItem(TOKEN, token);
   } catch {
     /* ignorar */
   }
@@ -47,41 +47,41 @@ async function llamar(path, { method = "GET", body, form, multipart } = {}) {
   }
 }
 
-async function errorDe(res) {
-  const err = await res.json().catch(() => ({}));
-  const detail = Array.isArray(err.detail) ? err.detail.map((d) => d.msg).join(", ") : err.detail;
-  return new Error(detail || `Error ${res.status}`);
+async function errorDe(respuesta) {
+  const err = await respuesta.json().catch(() => ({}));
+  const detail = Array.isArray(err.detail) ? err.detail.map((problema) => problema.msg).join(", ") : err.detail;
+  return new Error(detail || `Error ${respuesta.status}`);
 }
 
 async function request(path, opciones) {
-  const res = await llamar(path, opciones);
-  if (!res.ok) {
+  const respuesta = await llamar(path, opciones);
+  if (!respuesta.ok) {
     // Token vencido o cuenta desactivada: se cierra la sesión local para volver al ingreso.
-    if (res.status === 401 && getToken() && path !== "/auth/login" && !redirigiendo) {
+    if (respuesta.status === 401 && getToken() && path !== "/auth/login" && !redirigiendo) {
       redirigiendo = true;
       clearToken();
       rolActual = null;
       window.location.assign("/login");
     }
-    throw await errorDe(res);
+    throw await errorDe(respuesta);
   }
-  if (res.status === 204) return null;
-  return res.json();
+  if (respuesta.status === 204) return null;
+  return respuesta.json();
 }
 
 export const http = {
   modo: "api",
 
   async login(email, password) {
-    const r = await request("/auth/login", { method: "POST", form: { username: email, password } });
-    setToken(r.access_token);
-    return r;
+    const respuesta = await request("/auth/login", { method: "POST", form: { username: email, password } });
+    setToken(respuesta.access_token);
+    return respuesta;
   },
   register: (data) => request("/auth/register", { method: "POST", body: data }),
   async me() {
-    const u = await request("/auth/me");
-    rolActual = u.rol;
-    return u;
+    const usuario = await request("/auth/me");
+    rolActual = usuario.rol;
+    return usuario;
   },
   logout() {
     clearToken();
@@ -114,8 +114,8 @@ export const http = {
   },
 
   crearProyecto: (data) => request("/proyectos", { method: "POST", body: data }),
-  crearActivo: (pid, data) => request(`/proyectos/${pid}/activos`, { method: "POST", body: data }),
-  iniciarEvaluacion: (aid) => request(`/activos/${aid}/evaluaciones`, { method: "POST" }),
+  crearActivo: (proyectoId, data) => request(`/proyectos/${proyectoId}/activos`, { method: "POST", body: data }),
+  iniciarEvaluacion: (activoId) => request(`/activos/${activoId}/evaluaciones`, { method: "POST" }),
 
   marcarCorregido: (hallazgoId, corregido) =>
     request(`/hallazgos/${hallazgoId}`, { method: "PATCH", body: { corregido: corregido ? "si" : "no" } }),
@@ -130,24 +130,24 @@ export const http = {
   obtenerAnalisis: (id) => request(`/analisis/${id}`),
   analizarUrl: (url) => request("/analisis/url", { method: "POST", body: { url } }),
   analizarArchivo(archivo, subir) {
-    const fd = new FormData();
-    fd.append("archivo", archivo);
-    fd.append("subir", subir ? "true" : "false");
-    return request("/analisis/archivo", { method: "POST", multipart: fd });
+    const formulario = new FormData();
+    formulario.append("archivo", archivo);
+    formulario.append("subir", subir ? "true" : "false");
+    return request("/analisis/archivo", { method: "POST", multipart: formulario });
   },
   eliminarAnalisis: (id) => request(`/analisis/${id}`, { method: "DELETE" }),
   eliminarReporte: (id) => request(`/reportes/${id}`, { method: "DELETE" }),
   // El PDF exige el token, así que se baja con fetch y se entrega al navegador como archivo.
   async descargarReporte(reporte) {
-    const res = await llamar(`/reportes/${reporte.id}/descargar`);
-    if (!res.ok) throw await errorDe(res);
-    const url = URL.createObjectURL(await res.blob());
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = reporte.nombre_archivo || "informe.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const respuesta = await llamar(`/reportes/${reporte.id}/descargar`);
+    if (!respuesta.ok) throw await errorDe(respuesta);
+    const url = URL.createObjectURL(await respuesta.blob());
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = reporte.nombre_archivo || "informe.pdf";
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   },
 

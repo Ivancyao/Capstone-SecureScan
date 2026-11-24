@@ -8,9 +8,9 @@ import { useToast } from "../context/ToastContext.jsx";
 import { USE_MOCK } from "../services/index.js";
 import { SEV, SEVERIDADES, hallazgoDesdePuerto } from "../lib/risk.js";
 
-const MUESTRA = [[22, "ssh"], [80, "http"], [445, "microsoft-ds"], [3306, "mysql"], [5432, "postgresql"], [8080, "http-proxy"]].map(([puerto, servicio], i) => ({
+const MUESTRA = [[22, "ssh"], [80, "http"], [445, "microsoft-ds"], [3306, "mysql"], [5432, "postgresql"], [8080, "http-proxy"]].map(([puerto, servicio], indice) => ({
   ...hallazgoDesdePuerto({ puerto, servicio, producto: "", version: "" }),
-  id: `m${i}`,
+  id: `m${indice}`,
 }));
 
 function Marco({ children, lado }) {
@@ -25,8 +25,8 @@ function Marco({ children, lado }) {
             <PortMap hallazgos={MUESTRA} compacto />
           </div>
           <ul className="leyenda">
-            {SEVERIDADES.slice(0, 4).map((s) => (
-              <li key={s}><SevMark sev={s} /> {SEV[s].label}</li>
+            {SEVERIDADES.slice(0, 4).map((severidad) => (
+              <li key={severidad}><SevMark sev={severidad} /> {SEV[severidad].label}</li>
             ))}
           </ul>
         </div>
@@ -46,7 +46,7 @@ function CampoPassword({ id, valor, onChange, autoComplete, etiqueta = "Contrase
       <label htmlFor={id}>{etiqueta}</label>
       <div className="input-icon">
         <input id={id} className={`input ${invalido ? "is-invalid" : ""}`} type={ver ? "text" : "password"} value={valor} onChange={onChange} autoComplete={autoComplete} required />
-        <button type="button" className="btn btn-quiet btn-icon btn-sm" onClick={() => setVer((v) => !v)} aria-label={ver ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={ver}>
+        <button type="button" className="btn btn-quiet btn-icon btn-sm" onClick={() => setVer((visible) => !visible)} aria-label={ver ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={ver}>
           <Icon name="eye" size={16} />
         </button>
       </div>
@@ -63,13 +63,13 @@ const DEMO = [
 export function Login() {
   useTitulo("Ingresar");
   const { user, login } = useAuth();
-  const nav = useNavigate();
-  const loc = useLocation();
+  const navegar = useNavigate();
+  const ubicacion = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  const destino = loc.state?.desde || "/panel";
+  const destino = ubicacion.state?.desde || "/panel";
 
   if (user) return <Navigate to={destino} replace />;
 
@@ -78,9 +78,9 @@ export function Login() {
     setCargando(true);
     try {
       await login(correo, clave);
-      nav(destino, { replace: true });
-    } catch (e) {
-      setError(e.message);
+      navegar(destino, { replace: true });
+    } catch (problema) {
+      setError(problema.message);
     } finally {
       setCargando(false);
     }
@@ -90,19 +90,19 @@ export function Login() {
     <Marco lado={{ titulo: "Cada puerto abierto es una decisión pendiente.", texto: "Ingresa para ver el estado de tus activos y qué corregir primero." }}>
       <h1 className="h-title">Ingresar a SecureScan</h1>
       <p className="soft auth-sub">Usa la cuenta con la que te registraste.</p>
-      {loc.state?.registrado && <div className="notice notice-ok" role="status"><Icon name="check-circle" size={18} /><div>Cuenta creada. Ya puedes ingresar.</div></div>}
+      {ubicacion.state?.registrado && <div className="notice notice-ok" role="status"><Icon name="check-circle" size={18} /><div>Cuenta creada. Ya puedes ingresar.</div></div>}
       <form
         className="form-grid"
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(evento) => {
+          evento.preventDefault();
           entrar(email, password);
         }}
       >
         <div className="field">
           <label htmlFor="email">Correo</label>
-          <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" placeholder="nombre@institucion.cl" required />
+          <input id="email" className="input" type="email" value={email} onChange={(evento) => setEmail(evento.target.value)} autoComplete="username" placeholder="nombre@institucion.cl" required />
         </div>
-        <CampoPassword id="password" valor={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        <CampoPassword id="password" valor={password} onChange={(evento) => setPassword(evento.target.value)} autoComplete="current-password" />
         {error && <ErrorNote>{error}</ErrorNote>}
         <button className="btn btn-primary btn-lg" disabled={cargando}>{cargando ? "Ingresando…" : "Ingresar"}</button>
       </form>
@@ -114,10 +114,10 @@ export function Login() {
         <div className="demo-box">
           <p className="small"><strong>Modo demostración.</strong> Entra con una cuenta de ejemplo para ver cómo cambia la plataforma según el rol.</p>
           <div className="demo-btns">
-            {DEMO.map((d) => (
-              <button key={d.email} type="button" className="demo-btn" onClick={() => entrar(d.email, "Demo1234!")} disabled={cargando}>
-                <strong>{d.rotulo}</strong>
-                <span>{d.nota}</span>
+            {DEMO.map((cuenta) => (
+              <button key={cuenta.email} type="button" className="demo-btn" onClick={() => entrar(cuenta.email, "Demo1234!")} disabled={cargando}>
+                <strong>{cuenta.rotulo}</strong>
+                <span>{cuenta.nota}</span>
               </button>
             ))}
           </div>
@@ -130,27 +130,27 @@ export function Login() {
 export function Registro() {
   useTitulo("Crear cuenta");
   const { user, registrar } = useAuth();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const toast = useToast();
-  const [f, setF] = useState({ nombre: "", email: "", password: "", repetir: "" });
+  const [formulario, setFormulario] = useState({ nombre: "", email: "", password: "", repetir: "" });
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   if (user) return <Navigate to="/panel" replace />;
 
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
-  const largo = f.password.length >= 8;
-  const coincide = f.password.length > 0 && f.password === f.repetir;
+  const set = (campo) => (evento) => setFormulario((anterior) => ({ ...anterior, [campo]: evento.target.value }));
+  const largo = formulario.password.length >= 8;
+  const coincide = formulario.password.length > 0 && formulario.password === formulario.repetir;
 
-  const enviar = async (e) => {
-    e.preventDefault();
+  const enviar = async (evento) => {
+    evento.preventDefault();
     setError("");
     if (!largo) return setError("La contraseña debe tener al menos 8 caracteres.");
     if (!coincide) return setError("Las contraseñas no coinciden.");
     setCargando(true);
     try {
-      await registrar({ nombre: f.nombre, email: f.email, password: f.password });
+      await registrar({ nombre: formulario.nombre, email: formulario.email, password: formulario.password });
       toast.ok("Cuenta creada");
-      nav("/login", { state: { registrado: true } });
+      navegar("/login", { state: { registrado: true } });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -165,17 +165,17 @@ export function Registro() {
       <form className="form-grid" onSubmit={enviar}>
         <div className="field">
           <label htmlFor="nombre">Nombre completo</label>
-          <input id="nombre" className="input" value={f.nombre} onChange={set("nombre")} minLength={2} autoComplete="name" required />
+          <input id="nombre" className="input" value={formulario.nombre} onChange={set("nombre")} minLength={2} autoComplete="name" required />
         </div>
         <div className="field">
           <label htmlFor="email">Correo</label>
-          <input id="email" className="input" type="email" value={f.email} onChange={set("email")} autoComplete="email" required />
+          <input id="email" className="input" type="email" value={formulario.email} onChange={set("email")} autoComplete="email" required />
         </div>
-        <CampoPassword id="pw" valor={f.password} onChange={set("password")} autoComplete="new-password" />
+        <CampoPassword id="pw" valor={formulario.password} onChange={set("password")} autoComplete="new-password" />
         <ul className="reglas small">
           <li className={largo ? "ok" : ""}><Icon name={largo ? "check-circle" : "info"} size={15} /> Al menos 8 caracteres</li>
         </ul>
-        <CampoPassword id="pw2" etiqueta="Repite la contraseña" valor={f.repetir} onChange={set("repetir")} autoComplete="new-password" invalido={f.repetir && !coincide} />
+        <CampoPassword id="pw2" etiqueta="Repite la contraseña" valor={formulario.repetir} onChange={set("repetir")} autoComplete="new-password" invalido={formulario.repetir && !coincide} />
         {error && <ErrorNote>{error}</ErrorNote>}
         <button className="btn btn-primary btn-lg" disabled={cargando}>{cargando ? "Creando cuenta…" : "Crear cuenta"}</button>
       </form>

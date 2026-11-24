@@ -7,7 +7,7 @@ import { hostDe, uid } from "../lib/format.js";
 const KEY = "securescan-demo-v1";
 const TOKEN = "securescan-token";
 
-let db = cargar();
+let baseDeDatos = cargar();
 
 function cargar() {
   try {
@@ -23,28 +23,28 @@ function cargar() {
 }
 function guardar() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(db));
+    localStorage.setItem(KEY, JSON.stringify(baseDeDatos));
   } catch {
     /* ignorar */
   }
 }
-function guardarAnalisis(u, { tipo, objetivo, tamano_bytes = null, senales, veredicto }) {
+function guardarAnalisis(usuario, { tipo, objetivo, tamano_bytes = null, senales, veredicto }) {
   const frases = {
     malicioso: "Peligroso: se detectó una firma de malware conocida.",
     sospechoso: "Sospechoso: algún indicador local lo señala. No lo abras ni lo compartas hasta confirmarlo.",
     sin_datos: "Sin veredicto: VirusTotal no está configurado, solo hay indicadores locales.",
   };
   const ahora = new Date().toISOString();
-  const a = {
-    id: uid(), usuario_id: u.id, tipo, objetivo, sha256: null, tamano_bytes, estado: "completado", veredicto, resumen: frases[veredicto],
+  const analisis = {
+    id: uid(), usuario_id: usuario.id, tipo, objetivo, sha256: null, tamano_bytes, estado: "completado", veredicto, resumen: frases[veredicto],
     detalle: { virustotal: null, senales, cabeceras: null, avisos: ["Modo de ejemplo: no hay conexión con VirusTotal."] }, creado_en: ahora, finalizado_en: ahora,
   };
-  (db.analisis = db.analisis || []).push(a);
+  (baseDeDatos.analisis = baseDeDatos.analisis || []).push(analisis);
   guardar();
-  return clon(a);
+  return clon(analisis);
 }
-const esperar = (ms = 220) => new Promise((r) => setTimeout(r, ms));
-const clon = (x) => JSON.parse(JSON.stringify(x));
+const esperar = (milisegundos = 220) => new Promise((terminar) => setTimeout(terminar, milisegundos));
+const clon = (valor) => JSON.parse(JSON.stringify(valor));
 const fallo = (msg) => {
   throw new Error(msg);
 };
@@ -57,34 +57,34 @@ function usuarioActual() {
   } catch {
     /* ignorar */
   }
-  const u = db.usuarios.find((x) => x.id === id);
-  return u && u.activo !== false ? u : null;
+  const usuario = baseDeDatos.usuarios.find((candidato) => candidato.id === id);
+  return usuario && usuario.activo !== false ? usuario : null;
 }
 function requerirUsuario() {
   return usuarioActual() || fallo("Sesión expirada. Vuelve a iniciar sesión.");
 }
-const publico = ({ password, ...u }) => u;
+const publico = ({ password, ...usuarioSinClave }) => usuarioSinClave;
 
 // ---------- Simulación de escaneo ----------
-const esIPv4 = (h) => /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
-function esPrivada(h) {
-  if (h === "localhost") return true;
-  if (!esIPv4(h)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(h) || !h.includes(".");
-  const [a, b] = h.split(".").map(Number);
-  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+const esIPv4 = (host) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+function esPrivada(host) {
+  if (host === "localhost") return true;
+  if (!esIPv4(host)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(host) || !host.includes(".");
+  const [primerOcteto, segundoOcteto] = host.split(".").map(Number);
+  return primerOcteto === 10 || primerOcteto === 127 || (primerOcteto === 172 && segundoOcteto >= 16 && segundoOcteto <= 31) || (primerOcteto === 192 && segundoOcteto === 168) || (primerOcteto === 169 && segundoOcteto === 254);
 }
 function perfilPara(activo) {
-  if (!db.perfiles[activo.id]) {
+  if (!baseDeDatos.perfiles[activo.id]) {
     const opciones = [
       { puertos: [{ puerto: 22, servicio: "ssh", producto: "OpenSSH", version: "8.9p1" }, { puerto: 80, servicio: "http", producto: "nginx", version: "1.22" }], web: ["csp"] },
       { puertos: [{ puerto: 443, servicio: "https", producto: "Apache httpd", version: "2.4.57" }, { puerto: 3306, servicio: "mysql", producto: "MySQL", version: "8.0" }], web: ["hsts"] },
       { puertos: [{ puerto: 21, servicio: "ftp", producto: "vsftpd", version: "3.0.3" }, { puerto: 22, servicio: "ssh", producto: "OpenSSH", version: "8.4" }, { puerto: 8080, servicio: "http-proxy", producto: "Tomcat" }], web: ["cors", "cookie_httponly"] },
     ];
-    let h = 0;
-    for (const c of activo.url_objetivo) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    db.perfiles[activo.id] = opciones[h % opciones.length];
+    let hash = 0;
+    for (const caracter of activo.url_objetivo) hash = (hash * 31 + caracter.charCodeAt(0)) >>> 0;
+    baseDeDatos.perfiles[activo.id] = opciones[hash % opciones.length];
   }
-  return db.perfiles[activo.id];
+  return baseDeDatos.perfiles[activo.id];
 }
 
 function etapaDe(pct) {
@@ -95,46 +95,46 @@ function etapaDe(pct) {
 }
 
 // Avanza el estado de las evaluaciones simuladas según el tiempo transcurrido.
-function resolver(ev) {
-  const sim = ev._sim;
-  if (!sim) return ev;
-  const t = Date.now() - new Date(ev.iniciada_en).getTime();
-  if (t < 1200) return { ...ev, estado: "pendiente", progreso: 0, etapa: "En cola" };
-  if (t < sim.dur) {
-    const pct = Math.min(99, Math.round(((t - 1200) / (sim.dur - 1200)) * 100));
-    return { ...ev, estado: "en_progreso", progreso: pct, etapa: etapaDe(pct) };
+function resolver(evaluacion) {
+  const sim = evaluacion._sim;
+  if (!sim) return evaluacion;
+  const transcurrido = Date.now() - new Date(evaluacion.iniciada_en).getTime();
+  if (transcurrido < 1200) return { ...evaluacion, estado: "pendiente", progreso: 0, etapa: "En cola" };
+  if (transcurrido < sim.dur) {
+    const pct = Math.min(99, Math.round(((transcurrido - 1200) / (sim.dur - 1200)) * 100));
+    return { ...evaluacion, estado: "en_progreso", progreso: pct, etapa: etapaDe(pct) };
   }
   // Terminó: se materializa el resultado.
-  const final = { ...ev };
+  const final = { ...evaluacion };
   delete final._sim;
-  final.finalizada_en = new Date(new Date(ev.iniciada_en).getTime() + sim.dur).toISOString();
+  final.finalizada_en = new Date(new Date(evaluacion.iniciada_en).getTime() + sim.dur).toISOString();
   if (sim.error) {
     final.estado = "fallida";
     final.detalle_error = sim.error;
     final.hallazgos = [];
   } else {
     final.estado = "completada";
-    final.hallazgos = [...sim.puertos.map(hallazgoDesdePuerto), ...sim.web.map(hallazgoWeb)].map((h, i) => ({
-      ...h,
-      id: `${ev.id}-h${i + 1}`,
-      evaluacion_id: ev.id,
+    final.hallazgos = [...sim.puertos.map(hallazgoDesdePuerto), ...sim.web.map(hallazgoWeb)].map((hallazgo, indice) => ({
+      ...hallazgo,
+      id: `${evaluacion.id}-h${indice + 1}`,
+      evaluacion_id: evaluacion.id,
       corregido: "no",
     }));
   }
-  const i = db.evaluaciones.findIndex((x) => x.id === ev.id);
-  if (i >= 0) db.evaluaciones[i] = final;
+  const posicion = baseDeDatos.evaluaciones.findIndex((candidata) => candidata.id === evaluacion.id);
+  if (posicion >= 0) baseDeDatos.evaluaciones[posicion] = final;
   guardar();
   return final;
 }
 
 // ---------- Visibilidad por rol (propiedad de proyectos, como en el backend) ----------
-function visibles(u) {
-  const proyectos = db.proyectos.filter((p) => u.rol === "admin" || p.propietario_id === u.id);
-  const ids = new Set(proyectos.map((p) => p.id));
-  const activos = db.activos.filter((a) => ids.has(a.proyecto_id));
-  const aids = new Set(activos.map((a) => a.id));
-  const evaluaciones = db.evaluaciones.filter((e) => aids.has(e.activo_id)).map(resolver);
-  const reportes = db.reportes.filter((r) => ids.has(r.proyecto_id));
+function visibles(usuario) {
+  const proyectos = baseDeDatos.proyectos.filter((proyecto) => usuario.rol === "admin" || proyecto.propietario_id === usuario.id);
+  const ids = new Set(proyectos.map((proyecto) => proyecto.id));
+  const activos = baseDeDatos.activos.filter((activo) => ids.has(activo.proyecto_id));
+  const idsDeActivos = new Set(activos.map((activo) => activo.id));
+  const evaluaciones = baseDeDatos.evaluaciones.filter((evaluacion) => idsDeActivos.has(evaluacion.activo_id)).map(resolver);
+  const reportes = baseDeDatos.reportes.filter((reporte) => ids.has(reporte.proyecto_id));
   return { proyectos, activos, evaluaciones, reportes };
 }
 
@@ -144,23 +144,23 @@ export const mock = {
   // Auth
   async login(email, password) {
     await esperar();
-    const u = db.usuarios.find((x) => x.email.toLowerCase() === String(email).trim().toLowerCase());
-    if (!u || u.password !== password) fallo("Correo o contraseña incorrectos.");
-    if (u.activo === false) fallo("Esta cuenta está desactivada. Contacta a un administrador.");
+    const usuario = baseDeDatos.usuarios.find((candidato) => candidato.email.toLowerCase() === String(email).trim().toLowerCase());
+    if (!usuario || usuario.password !== password) fallo("Correo o contraseña incorrectos.");
+    if (usuario.activo === false) fallo("Esta cuenta está desactivada. Contacta a un administrador.");
     try {
-      localStorage.setItem(TOKEN, u.id);
+      localStorage.setItem(TOKEN, usuario.id);
     } catch {
       /* ignorar */
     }
-    return { access_token: u.id, token_type: "bearer" };
+    return { access_token: usuario.id, token_type: "bearer" };
   },
   async register({ nombre, email, password }) {
     await esperar();
-    if (db.usuarios.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) fallo("Ese correo ya está registrado.");
-    const u = { id: uid(), nombre: nombre.trim(), email: email.trim(), password, rol: "usuario", activo: true, creado_en: new Date().toISOString() };
-    db.usuarios.push(u);
+    if (baseDeDatos.usuarios.some((existente) => existente.email.toLowerCase() === email.trim().toLowerCase())) fallo("Ese correo ya está registrado.");
+    const usuarioNuevo = { id: uid(), nombre: nombre.trim(), email: email.trim(), password, rol: "usuario", activo: true, creado_en: new Date().toISOString() };
+    baseDeDatos.usuarios.push(usuarioNuevo);
     guardar();
-    return publico(u);
+    return publico(usuarioNuevo);
   },
   async me() {
     await esperar(80);
@@ -179,12 +179,12 @@ export const mock = {
 
   // Lectura
   async snapshot() {
-    const u = requerirUsuario();
-    const v = visibles(u);
+    const usuario = requerirUsuario();
+    const valor = visibles(usuario);
     return clon({
-      ...v,
-      usuarios: u.rol === "admin" ? db.usuarios.map(publico) : [],
-      config: db.config,
+      ...valor,
+      usuarios: usuario.rol === "admin" ? baseDeDatos.usuarios.map(publico) : [],
+      config: baseDeDatos.config,
       capacidades: { usuarios: true, reportes: true, configuracion: true, corregir: true },
     });
   },
@@ -192,45 +192,45 @@ export const mock = {
   // Escritura
   async crearProyecto(data) {
     await esperar();
-    const u = requerirUsuario();
-    const p = { id: uid(), nombre: data.nombre.trim(), descripcion: (data.descripcion || "").trim() || null, propietario_id: u.id, creado_en: new Date().toISOString() };
-    db.proyectos.unshift(p);
+    const usuario = requerirUsuario();
+    const proyecto = { id: uid(), nombre: data.nombre.trim(), descripcion: (data.descripcion || "").trim() || null, propietario_id: usuario.id, creado_en: new Date().toISOString() };
+    baseDeDatos.proyectos.unshift(proyecto);
     guardar();
-    return clon(p);
+    return clon(proyecto);
   },
   async crearActivo(proyectoId, data) {
     await esperar();
-    const u = requerirUsuario();
-    const p = db.proyectos.find((x) => x.id === proyectoId && (u.rol === "admin" || x.propietario_id === u.id));
-    if (!p) fallo("Proyecto no encontrado");
-    const a = { id: uid(), proyecto_id: proyectoId, nombre: data.nombre.trim(), url_objetivo: data.url_objetivo.trim(), descripcion: (data.descripcion || "").trim() || null, creado_en: new Date().toISOString() };
-    db.activos.push(a);
+    const usuario = requerirUsuario();
+    const proyecto = baseDeDatos.proyectos.find((candidato) => candidato.id === proyectoId && (usuario.rol === "admin" || candidato.propietario_id === usuario.id));
+    if (!proyecto) fallo("Proyecto no encontrado");
+    const activoNuevo = { id: uid(), proyecto_id: proyectoId, nombre: data.nombre.trim(), url_objetivo: data.url_objetivo.trim(), descripcion: (data.descripcion || "").trim() || null, creado_en: new Date().toISOString() };
+    baseDeDatos.activos.push(activoNuevo);
     guardar();
-    return clon(a);
+    return clon(activoNuevo);
   },
   async iniciarEvaluacion(activoId) {
     await esperar();
-    const u = requerirUsuario();
-    const a = visibles(u).activos.find((x) => x.id === activoId);
-    if (!a) fallo("Activo no encontrado");
-    const enCurso = visibles(u).evaluaciones.some((e) => e.activo_id === activoId && (e.estado === "pendiente" || e.estado === "en_progreso"));
+    const usuario = requerirUsuario();
+    const activo = visibles(usuario).activos.find((candidato) => candidato.id === activoId);
+    if (!activo) fallo("Activo no encontrado");
+    const enCurso = visibles(usuario).evaluaciones.some((evaluacion) => evaluacion.activo_id === activoId && (evaluacion.estado === "pendiente" || evaluacion.estado === "en_progreso"));
     if (enCurso) fallo("Ya hay una evaluación en curso para este activo.");
-    const host = hostDe(a.url_objetivo);
-    const perfil = perfilPara(a);
-    const sim = { dur: 11000, puertos: perfil.puertos, web: db.config.motores.zap.activo ? perfil.web : [] };
-    if (!db.config.alcance.permitir_publicas && !esPrivada(host)) {
+    const host = hostDe(activo.url_objetivo);
+    const perfil = perfilPara(activo);
+    const sim = { dur: 11000, puertos: perfil.puertos, web: baseDeDatos.config.motores.zap.activo ? perfil.web : [] };
+    if (!baseDeDatos.config.alcance.permitir_publicas && !esPrivada(host)) {
       sim.dur = 4500;
-      sim.error = `Objetivo bloqueado: ${host} corresponde a una dirección pública. SecureScan solo evalúa redes privadas, loopback o link-local (ALLOW_PUBLIC_SCANS=false).`;
+      sim.error = `Objetivo bloqueado: ${host} corresponde a una dirección pública. SecureScan solo evalúa redes privadas o loopback (ALLOW_PUBLIC_SCANS=false).`;
     }
-    const ev = { id: uid(), activo_id: activoId, estado: "pendiente", iniciada_en: new Date().toISOString(), finalizada_en: null, detalle_error: null, hallazgos: [], _sim: sim };
-    db.evaluaciones.push(ev);
+    const evaluacion = { id: uid(), activo_id: activoId, estado: "pendiente", iniciada_en: new Date().toISOString(), finalizada_en: null, detalle_error: null, hallazgos: [], _sim: sim };
+    baseDeDatos.evaluaciones.push(evaluacion);
     guardar();
-    return clon(resolver(ev));
+    return clon(resolver(evaluacion));
   },
   async cancelarEvaluacion(id) {
     await esperar(150);
-    const u = requerirUsuario();
-    const bruta = visibles(u).evaluaciones.find((x) => x.id === id);
+    const usuario = requerirUsuario();
+    const bruta = visibles(usuario).evaluaciones.find((candidata) => candidata.id === id);
     if (!bruta) fallo("Evaluación no encontrada");
     const actual = resolver(bruta);
     if (actual.estado !== "pendiente" && actual.estado !== "en_progreso") fallo("La evaluación ya terminó; no hay nada que cancelar.");
@@ -241,12 +241,12 @@ export const mock = {
   },
   async eliminarEvaluacion(id) {
     await esperar(150);
-    const u = requerirUsuario();
-    const bruta = visibles(u).evaluaciones.find((x) => x.id === id);
+    const usuario = requerirUsuario();
+    const bruta = visibles(usuario).evaluaciones.find((candidata) => candidata.id === id);
     if (!bruta) fallo("Evaluación no encontrada");
     const actual = resolver(bruta);
     if (actual.estado === "pendiente" || actual.estado === "en_progreso") fallo("La evaluación está en curso: cancélala antes de eliminarla.");
-    db.evaluaciones = db.evaluaciones.filter((x) => x.id !== id);
+    baseDeDatos.evaluaciones = baseDeDatos.evaluaciones.filter((otra) => otra.id !== id);
     guardar();
   },
   // ---------- Análisis de URL / archivo (simulado: solo indicadores locales, sin VirusTotal) ----------
@@ -256,124 +256,124 @@ export const mock = {
   },
   async listarAnalisis() {
     await esperar(120);
-    const u = requerirUsuario();
-    return clon((db.analisis || []).filter((a) => a.usuario_id === u.id).sort((a, b) => b.creado_en.localeCompare(a.creado_en)));
+    const usuario = requerirUsuario();
+    return clon((baseDeDatos.analisis || []).filter((analisis) => analisis.usuario_id === usuario.id).sort((analisis, segundo) => segundo.creado_en.localeCompare(analisis.creado_en)));
   },
   async obtenerAnalisis(id) {
-    const u = requerirUsuario();
-    const a = (db.analisis || []).find((x) => x.id === id && x.usuario_id === u.id);
-    return a ? clon(a) : fallo("Análisis no encontrado");
+    const usuario = requerirUsuario();
+    const analisis = (baseDeDatos.analisis || []).find((candidato) => candidato.id === id && candidato.usuario_id === usuario.id);
+    return analisis ? clon(analisis) : fallo("Análisis no encontrado");
   },
   async analizarUrl(url) {
     await esperar(500);
-    const u = requerirUsuario();
+    const usuario = requerirUsuario();
     if (!/^https?:\/\//i.test(url)) fallo("La URL debe empezar con http:// o https://");
     const senales = [];
     if (/^http:/i.test(url)) senales.push({ codigo: "sin_https", nivel: "bajo", texto: "No usa HTTPS: el tráfico viaja sin cifrar." });
     if (/\/\/\d{1,3}(\.\d{1,3}){3}/.test(url)) senales.push({ codigo: "ip_literal", nivel: "medio", texto: "La dirección es una IP en vez de un nombre: es habitual en sitios temporales o de phishing." });
     if (/\/\/(bit\.ly|tinyurl\.com|t\.co)\//i.test(url)) senales.push({ codigo: "acortador", nivel: "medio", texto: "Es un acortador de enlaces: oculta el destino real." });
-    const veredicto = senales.some((x) => x.nivel !== "bajo") ? "sospechoso" : "sin_datos";
-    return guardarAnalisis(u, { tipo: "url", objetivo: url, senales, veredicto });
+    const veredicto = senales.some((senal) => senal.nivel !== "bajo") ? "sospechoso" : "sin_datos";
+    return guardarAnalisis(usuario, { tipo: "url", objetivo: url, senales, veredicto });
   },
   async analizarArchivo(archivo) {
     await esperar(600);
-    const u = requerirUsuario();
+    const usuario = requerirUsuario();
     const texto = await archivo.slice(0, 1024).text().catch(() => "");
     const senales = [];
     if (texto.includes("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) senales.push({ codigo: "eicar", nivel: "alto", texto: "Contiene la firma de prueba EICAR: los antivirus la detectan a propósito. Es inofensiva, pero confirma que el análisis funciona.", concluyente: true });
     if (/\.(pdf|docx?|xlsx?|jpe?g|png)\.(exe|scr|bat|cmd|js|vbs)$/i.test(archivo.name)) senales.push({ codigo: "doble_extension", nivel: "alto", texto: "Doble extensión: un ejecutable disfrazado de documento es una táctica común de malware." });
-    const veredicto = senales.some((x) => x.concluyente) ? "malicioso" : senales.length ? "sospechoso" : "sin_datos";
-    return guardarAnalisis(u, { tipo: "archivo", objetivo: archivo.name, tamano_bytes: archivo.size, senales, veredicto });
+    const veredicto = senales.some((senal) => senal.concluyente) ? "malicioso" : senales.length ? "sospechoso" : "sin_datos";
+    return guardarAnalisis(usuario, { tipo: "archivo", objetivo: archivo.name, tamano_bytes: archivo.size, senales, veredicto });
   },
   async eliminarAnalisis(id) {
     await esperar(100);
-    const u = requerirUsuario();
-    db.analisis = (db.analisis || []).filter((a) => !(a.id === id && a.usuario_id === u.id));
+    const usuario = requerirUsuario();
+    baseDeDatos.analisis = (baseDeDatos.analisis || []).filter((analisis) => !(analisis.id === id && analisis.usuario_id === usuario.id));
     guardar();
   },
   async marcarCorregido(hallazgoId, corregido) {
     await esperar(120);
     requerirUsuario();
-    for (const e of db.evaluaciones) {
-      const h = e.hallazgos.find((x) => x.id === hallazgoId);
-      if (h) {
-        h.corregido = corregido ? "si" : "no";
+    for (const evaluacion of baseDeDatos.evaluaciones) {
+      const hallazgo = evaluacion.hallazgos.find((candidato) => candidato.id === hallazgoId);
+      if (hallazgo) {
+        hallazgo.corregido = corregido ? "si" : "no";
         guardar();
-        return clon(h);
+        return clon(hallazgo);
       }
     }
     return fallo("Hallazgo no encontrado");
   },
   async crearReporte({ proyecto_id, titulo, evaluacion_ids }) {
     await esperar(700);
-    const u = requerirUsuario();
-    const p = db.proyectos.find((x) => x.id === proyecto_id);
-    if (!p) fallo("Proyecto no encontrado");
-    const slug = p.nombre.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const r = { id: uid(), proyecto_id, titulo: titulo || `Informe de seguridad — ${p.nombre}`, nombre_archivo: `informe-${slug}.pdf`, generado_en: new Date().toISOString(), generado_por: u.nombre, evaluacion_ids, tamano_kb: 80 + evaluacion_ids.length * 34 };
-    db.reportes.unshift(r);
+    const usuario = requerirUsuario();
+    const proyecto = baseDeDatos.proyectos.find((candidato) => candidato.id === proyecto_id);
+    if (!proyecto) fallo("Proyecto no encontrado");
+    const slug = proyecto.nombre.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const reporte = { id: uid(), proyecto_id, titulo: titulo || `Informe de seguridad — ${proyecto.nombre}`, nombre_archivo: `informe-${slug}.pdf`, generado_en: new Date().toISOString(), generado_por: usuario.nombre, evaluacion_ids, tamano_kb: 80 + evaluacion_ids.length * 34 };
+    baseDeDatos.reportes.unshift(reporte);
     guardar();
-    return clon(r);
+    return clon(reporte);
   },
   async eliminarReporte(id) {
     await esperar(120);
-    db.reportes = db.reportes.filter((r) => r.id !== id);
+    baseDeDatos.reportes = baseDeDatos.reportes.filter((reporte) => reporte.id !== id);
     guardar();
   },
   async cambiarRol(usuarioId, rol) {
     await esperar(150);
-    const u = requerirUsuario();
-    if (u.rol !== "admin") fallo("Solo un administrador puede cambiar roles.");
-    const t = db.usuarios.find((x) => x.id === usuarioId);
-    if (!t) fallo("Usuario no encontrado");
-    if (t.id === u.id) fallo("No puedes cambiar tu propio rol.");
-    t.rol = rol;
+    const usuario = requerirUsuario();
+    if (usuario.rol !== "admin") fallo("Solo un administrador puede cambiar roles.");
+    const objetivo = baseDeDatos.usuarios.find((candidato) => candidato.id === usuarioId);
+    if (!objetivo) fallo("Usuario no encontrado");
+    if (objetivo.id === usuario.id) fallo("No puedes cambiar tu propio rol.");
+    objetivo.rol = rol;
     guardar();
   },
   async alternarUsuario(usuarioId) {
     await esperar(150);
-    const u = requerirUsuario();
-    if (u.rol !== "admin") fallo("Solo un administrador puede desactivar cuentas.");
-    const t = db.usuarios.find((x) => x.id === usuarioId);
-    if (!t) fallo("Usuario no encontrado");
-    if (t.id === u.id) fallo("No puedes desactivar tu propia cuenta.");
-    t.activo = t.activo === false;
+    const usuario = requerirUsuario();
+    if (usuario.rol !== "admin") fallo("Solo un administrador puede desactivar cuentas.");
+    const objetivo = baseDeDatos.usuarios.find((candidato) => candidato.id === usuarioId);
+    if (!objetivo) fallo("Usuario no encontrado");
+    if (objetivo.id === usuario.id) fallo("No puedes desactivar tu propia cuenta.");
+    objetivo.activo = objetivo.activo === false;
     guardar();
   },
   async invitarUsuario({ nombre, email, rol }) {
     await esperar();
-    const u = requerirUsuario();
-    if (u.rol !== "admin") fallo("Solo un administrador puede crear cuentas.");
-    if (db.usuarios.some((x) => x.email.toLowerCase() === email.trim().toLowerCase())) fallo("Ese correo ya está registrado.");
+    const usuario = requerirUsuario();
+    if (usuario.rol !== "admin") fallo("Solo un administrador puede crear cuentas.");
+    if (baseDeDatos.usuarios.some((existente) => existente.email.toLowerCase() === email.trim().toLowerCase())) fallo("Ese correo ya está registrado.");
     const nuevo = { id: uid(), nombre: nombre.trim(), email: email.trim(), password: "Demo1234!", rol, activo: true, creado_en: new Date().toISOString() };
-    db.usuarios.push(nuevo);
+    baseDeDatos.usuarios.push(nuevo);
     guardar();
     return { ...publico(nuevo), password_temporal: "Demo1234!" };
   },
   async actualizarPerfil({ nombre }) {
     await esperar();
-    const u = requerirUsuario();
-    u.nombre = nombre.trim();
+    const usuario = requerirUsuario();
+    usuario.nombre = nombre.trim();
     guardar();
-    return publico(u);
+    return publico(usuario);
   },
   async cambiarPassword({ actual, nueva }) {
     await esperar();
-    const u = requerirUsuario();
-    if (u.password !== actual) fallo("La contraseña actual no coincide.");
-    u.password = nueva;
+    const usuario = requerirUsuario();
+    if (usuario.password !== actual) fallo("La contraseña actual no coincide.");
+    usuario.password = nueva;
     guardar();
   },
   async guardarConfig(config) {
     await esperar();
-    const u = requerirUsuario();
-    if (u.rol !== "admin") fallo("Solo un administrador puede cambiar la configuración.");
-    db.config = clon(config);
+    const usuario = requerirUsuario();
+    if (usuario.rol !== "admin") fallo("Solo un administrador puede cambiar la configuración.");
+    baseDeDatos.config = clon(config);
     guardar();
-    return clon(db.config);
+    return clon(baseDeDatos.config);
   },
   async restablecer() {
-    db = construirSeed();
+    baseDeDatos = construirSeed();
     guardar();
   },
 };

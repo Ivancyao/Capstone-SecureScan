@@ -24,9 +24,9 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     await api.login(email, password);
     salidaManual.current = false;
-    const u = await api.me();
-    setUser(u);
-    return u;
+    const usuario = await api.me();
+    setUser(usuario);
+    return usuario;
   }, []);
   const registrar = useCallback((datos) => api.register(datos), []);
   const salir = useCallback(() => {

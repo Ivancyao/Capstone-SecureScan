@@ -22,7 +22,6 @@ RANGOS_PERMITIDOS = [
     "172.16.0.0/12",
     "192.168.0.0/16",
     "127.0.0.0/8",
-    "169.254.0.0/16",
 ]
 
 POR_DEFECTO: Dict[str, Any] = {
@@ -46,25 +45,25 @@ def servidor_permite_publicas() -> bool:
     return os.getenv("ALLOW_PUBLIC_SCANS", "false").lower() == "true"
 
 
-def _completar(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _completar(configuracion: Dict[str, Any]) -> Dict[str, Any]:
     """Valores calculados que se muestran en la web pero no se guardan."""
-    out = copy.deepcopy(cfg)
+    resultado = copy.deepcopy(configuracion)
     from app import zap_client
 
-    out["motores"]["zap"]["disponible"] = zap_client.disponible()  # ¿el operador configuró ZAP_URL?
-    out["alcance"]["rangos"] = list(RANGOS_PERMITIDOS)
-    out["alcance"]["publicas_permitidas_por_servidor"] = servidor_permite_publicas()
-    return out
+    resultado["motores"]["zap"]["disponible"] = zap_client.disponible()  # ¿el operador configuró ZAP_URL?
+    resultado["alcance"]["rangos"] = list(RANGOS_PERMITIDOS)
+    resultado["alcance"]["publicas_permitidas_por_servidor"] = servidor_permite_publicas()
+    return resultado
 
 
 def _fusionar(base: Dict[str, Any], cambios: Dict[str, Any]) -> Dict[str, Any]:
-    out = copy.deepcopy(base)
-    for k, v in cambios.items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _fusionar(out[k], v)
+    resultado = copy.deepcopy(base)
+    for clave, valor in cambios.items():
+        if isinstance(valor, dict) and isinstance(resultado.get(clave), dict):
+            resultado[clave] = _fusionar(resultado[clave], valor)
         else:
-            out[k] = v
-    return out
+            resultado[clave] = valor
+    return resultado
 
 
 def obtener(db: Session) -> Dict[str, Any]:
@@ -73,16 +72,16 @@ def obtener(db: Session) -> Dict[str, Any]:
     return _completar(_fusionar(POR_DEFECTO, guardada))
 
 
-def guardar(db: Session, cfg: Dict[str, Any]) -> Dict[str, Any]:
+def guardar(db: Session, configuracion: Dict[str, Any]) -> Dict[str, Any]:
     """Guarda solo lo que se puede cambiar (lo calculado se descarta)."""
     limpio = {
         "motores": {
-            "nmap": cfg["motores"]["nmap"],
-            "zap": {k: cfg["motores"]["zap"][k] for k in ("activo", "escaneo_activo", "timeout_s")},
+            "nmap": configuracion["motores"]["nmap"],
+            "zap": {clave: configuracion["motores"]["zap"][clave] for clave in ("activo", "escaneo_activo", "timeout_s")},
             "nikto": {"activo": False},
         },
-        "alcance": {"permitir_publicas": bool(cfg["alcance"]["permitir_publicas"])},
-        "retencion_dias": cfg["retencion_dias"],
+        "alcance": {"permitir_publicas": bool(configuracion["alcance"]["permitir_publicas"])},
+        "retencion_dias": configuracion["retencion_dias"],
     }
     fila = db.get(Configuracion, CLAVE)
     if fila is None:
@@ -95,9 +94,9 @@ def guardar(db: Session, cfg: Dict[str, Any]) -> Dict[str, Any]:
     return obtener(db)
 
 
-def publicas_efectivas(cfg: Dict[str, Any]) -> bool:
+def publicas_efectivas(configuracion: Dict[str, Any]) -> bool:
     """Se escanean IP públicas solo si el servidor Y la configuración lo permiten."""
-    return servidor_permite_publicas() and bool(cfg["alcance"]["permitir_publicas"])
+    return servidor_permite_publicas() and bool(configuracion["alcance"]["permitir_publicas"])
 
 
 def aplicar_retencion(db: Session) -> int:
@@ -111,19 +110,19 @@ def aplicar_retencion(db: Session) -> int:
         return 0
     limite = ahora_utc() - timedelta(days=dias)
     vigentes = {}  # activo_id -> id de su evaluación completada más reciente
-    for ev in (
+    for evaluacion in (
         db.query(Evaluacion)
         .filter(Evaluacion.estado == EstadoEvaluacion.COMPLETADA)
         .order_by(Evaluacion.iniciada_en.desc())
         .all()
     ):
-        vigentes.setdefault(ev.activo_id, ev.id)
+        vigentes.setdefault(evaluacion.activo_id, evaluacion.id)
     ids_vigentes = set(vigentes.values())
     borradas = 0
-    for ev in db.query(Evaluacion).filter(Evaluacion.iniciada_en < limite).all():
-        if ev.id in ids_vigentes or ev.estado in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
+    for evaluacion in db.query(Evaluacion).filter(Evaluacion.iniciada_en < limite).all():
+        if evaluacion.id in ids_vigentes or evaluacion.estado in (EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO):
             continue
-        db.delete(ev)
+        db.delete(evaluacion)
         borradas += 1
     if borradas:
         db.commit()

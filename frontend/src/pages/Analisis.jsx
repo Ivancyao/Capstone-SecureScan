@@ -15,64 +15,64 @@ const NIVEL_SEV = { alto: "alta", medio: "media", bajo: "baja" };
 const SEV_CAB = { alta: "alta", media: "media", baja: "baja" };
 
 function Veredicto({ valor, grande = false }) {
-  const v = VEREDICTOS[valor] || VEREDICTOS.sin_datos;
+  const estiloVeredicto = VEREDICTOS[valor] || VEREDICTOS.sin_datos;
   return (
-    <span className={`veredicto ${grande ? "grande" : ""}`} style={{ "--v-color": v.color, "--v-fondo": v.fondo }}>
-      <Icon name={v.icono} size={grande ? 20 : 14} />
-      {v.texto}
+    <span className={`veredicto ${grande ? "grande" : ""}`} style={{ "--v-color": estiloVeredicto.color, "--v-fondo": estiloVeredicto.fondo }}>
+      <Icon name={estiloVeredicto.icono} size={grande ? 20 : 14} />
+      {estiloVeredicto.texto}
     </span>
   );
 }
 
-function Resultado({ a }) {
-  const d = a.detalle || {};
-  const vt = d.virustotal;
-  const cab = d.cabeceras;
-  const copiar = () => navigator.clipboard?.writeText(a.sha256).catch(() => {});
+function Resultado({ analisis }) {
+  const detalle = analisis.detalle || {};
+  const virustotal = detalle.virustotal;
+  const cabeceras = detalle.cabeceras;
+  const copiar = () => navigator.clipboard?.writeText(analisis.sha256).catch(() => {});
   return (
     <div className="analisis-resultado">
       <div className="analisis-cabecera">
-        <Veredicto valor={a.veredicto} grande />
+        <Veredicto valor={analisis.veredicto} grande />
         <div>
-          <p className="analisis-resumen">{a.resumen}</p>
+          <p className="analisis-resumen">{analisis.resumen}</p>
           <p className="small muted analisis-objetivo">
-            <Icon name={a.tipo === "url" ? "globe" : "file"} size={14} /> {a.objetivo}
-            {a.tamano_bytes != null && <span> · {fmtKb(Math.max(1, Math.round(a.tamano_bytes / 1024)))}</span>}
+            <Icon name={analisis.tipo === "url" ? "globe" : "file"} size={14} /> {analisis.objetivo}
+            {analisis.tamano_bytes != null && <span> · {fmtKb(Math.max(1, Math.round(analisis.tamano_bytes / 1024)))}</span>}
           </p>
         </div>
       </div>
 
-      {a.sha256 && (
+      {analisis.sha256 && (
         <p className="small analisis-hash">
-          <span className="muted">SHA-256</span> <code>{a.sha256}</code>
+          <span className="muted">SHA-256</span> <code>{analisis.sha256}</code>
           <button className="btn btn-quiet btn-icon btn-sm" onClick={copiar} aria-label="Copiar huella SHA-256" title="Copiar">
             <Icon name="copy" size={14} />
           </button>
         </p>
       )}
 
-      {(d.avisos || []).map((t, i) => (
-        <Aviso key={i} tipo="info">{t}</Aviso>
+      {(detalle.avisos || []).map((aviso, indice) => (
+        <Aviso key={indice} tipo="info">{aviso}</Aviso>
       ))}
 
-      {vt && (
+      {virustotal && (
         <section className="analisis-bloque">
           <h3 className="h-section">Motores antivirus (VirusTotal)</h3>
-          <div className="vt-barra" role="img" aria-label={`${vt.malicioso} maliciosos, ${vt.sospechoso} sospechosos, ${vt.inofensivo} inofensivos, ${vt.sin_deteccion} sin detección`}>
-            <i style={{ flex: vt.malicioso, background: "var(--sev-critica)" }} />
-            <i style={{ flex: vt.sospechoso, background: "var(--sev-media)" }} />
-            <i style={{ flex: vt.inofensivo, background: "var(--ok)" }} />
-            <i style={{ flex: vt.sin_deteccion, background: "var(--line-strong)" }} />
+          <div className="vt-barra" role="img" aria-label={`${virustotal.malicioso} maliciosos, ${virustotal.sospechoso} sospechosos, ${virustotal.inofensivo} inofensivos, ${virustotal.sin_deteccion} sin detección`}>
+            <i style={{ flex: virustotal.malicioso, background: "var(--sev-critica)" }} />
+            <i style={{ flex: virustotal.sospechoso, background: "var(--sev-media)" }} />
+            <i style={{ flex: virustotal.inofensivo, background: "var(--ok)" }} />
+            <i style={{ flex: virustotal.sin_deteccion, background: "var(--line-strong)" }} />
           </div>
           <p className="small">
-            <strong className="num">{vt.malicioso + vt.sospechoso}</strong> de <span className="num">{vt.motores}</span> motores lo marcan como peligroso o sospechoso.
+            <strong className="num">{virustotal.malicioso + virustotal.sospechoso}</strong> de <span className="num">{virustotal.motores}</span> motores lo marcan como peligroso o sospechoso.
           </p>
-          {vt.detecciones?.length > 0 && (
+          {virustotal.detecciones?.length > 0 && (
             <ul className="vt-lista">
-              {vt.detecciones.map((x) => (
-                <li key={x.motor}>
-                  <span>{x.motor}</span>
-                  <code>{x.resultado}</code>
+              {virustotal.detecciones.map((deteccion) => (
+                <li key={deteccion.motor}>
+                  <span>{deteccion.motor}</span>
+                  <code>{deteccion.resultado}</code>
                 </li>
               ))}
             </ul>
@@ -80,34 +80,34 @@ function Resultado({ a }) {
         </section>
       )}
 
-      {d.senales?.length > 0 && (
+      {detalle.senales?.length > 0 && (
         <section className="analisis-bloque">
           <h3 className="h-section">Indicadores locales</h3>
           <ul className="senales">
-            {d.senales.map((s) => (
-              <li key={s.codigo}>
-                <SevBadge sev={NIVEL_SEV[s.nivel] || "informativa"} />
-                <span>{s.texto}</span>
+            {detalle.senales.map((senal) => (
+              <li key={senal.codigo}>
+                <SevBadge sev={NIVEL_SEV[senal.nivel] || "informativa"} />
+                <span>{senal.texto}</span>
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {cab && (
+      {cabeceras && (
         <section className="analisis-bloque">
           <h3 className="h-section">Cabeceras de seguridad del sitio</h3>
-          {!cab.contactado ? (
-            <p className="small muted">{cab.motivo}</p>
-          ) : cab.hallazgos.length === 0 ? (
-            <p className="small">El sitio respondió (HTTP {cab.codigo_http}) y trae las cabeceras de seguridad básicas.</p>
+          {!cabeceras.contactado ? (
+            <p className="small muted">{cabeceras.motivo}</p>
+          ) : cabeceras.hallazgos.length === 0 ? (
+            <p className="small">El sitio respondió (HTTP {cabeceras.codigo_http}) y trae las cabeceras de seguridad básicas.</p>
           ) : (
             <ul className="senales">
-              {cab.hallazgos.map((h, i) => (
-                <li key={i}>
-                  <SevBadge sev={SEV_CAB[h.severidad] || "baja"} />
+              {cabeceras.hallazgos.map((hallazgo, indice) => (
+                <li key={indice}>
+                  <SevBadge sev={SEV_CAB[hallazgo.severidad] || "baja"} />
                   <span>
-                    <strong>{h.titulo}.</strong> {h.detalle}
+                    <strong>{hallazgo.titulo}.</strong> {hallazgo.detalle}
                   </span>
                 </li>
               ))}
@@ -137,8 +137,8 @@ export function Analisis() {
   const cargarHistorial = useCallback(async () => {
     try {
       setHistorial(await api.listarAnalisis());
-    } catch (e) {
-      toast.error("No se pudo cargar el historial", e.message);
+    } catch (error) {
+      toast.error("No se pudo cargar el historial", error.message);
     }
   }, [toast]);
 
@@ -152,17 +152,17 @@ export function Analisis() {
     (id) => {
       const paso = async () => {
         try {
-          const a = await api.obtenerAnalisis(id);
-          setActual(a);
-          if (a.estado === "pendiente") {
+          const analisis = await api.obtenerAnalisis(id);
+          setActual(analisis);
+          if (analisis.estado === "pendiente") {
             sondeo.current = setTimeout(paso, 1500);
           } else {
             setEnviando(false);
             cargarHistorial();
           }
-        } catch (e) {
+        } catch (error) {
           setEnviando(false);
-          toast.error("No se pudo consultar el análisis", e.message);
+          toast.error("No se pudo consultar el análisis", error.message);
         }
       };
       paso();
@@ -170,43 +170,43 @@ export function Analisis() {
     [cargarHistorial, toast]
   );
 
-  const analizar = async (ev) => {
-    ev.preventDefault();
+  const analizar = async (evento) => {
+    evento.preventDefault();
     clearTimeout(sondeo.current);
     setEnviando(true);
     setActual(null);
     try {
-      const a = modo === "url" ? await api.analizarUrl(url.trim()) : await api.analizarArchivo(archivo, subir);
-      setActual(a);
-      if (a.estado === "pendiente") seguir(a.id);
+      const analisis = modo === "url" ? await api.analizarUrl(url.trim()) : await api.analizarArchivo(archivo, subir);
+      setActual(analisis);
+      if (analisis.estado === "pendiente") seguir(analisis.id);
       else {
         setEnviando(false);
         cargarHistorial();
       }
-    } catch (e) {
+    } catch (error) {
       setEnviando(false);
-      toast.error("No se pudo iniciar el análisis", e.message);
+      toast.error("No se pudo iniciar el análisis", error.message);
     }
   };
 
-  const elegir = (f) => {
-    if (!f) return;
-    if (estado && f.size > estado.max_mb * 1024 * 1024) {
+  const elegir = (archivoElegido) => {
+    if (!archivoElegido) return;
+    if (estado && archivoElegido.size > estado.max_mb * 1024 * 1024) {
       toast.error("Archivo demasiado grande", `El máximo es ${estado.max_mb} MB.`);
       return;
     }
-    setArchivo(f);
+    setArchivo(archivoElegido);
   };
 
-  const eliminar = async (a) => {
-    if (!window.confirm(`¿Eliminar el análisis de «${a.objetivo}»?`)) return;
+  const eliminar = async (analisis) => {
+    if (!window.confirm(`¿Eliminar el análisis de «${analisis.objetivo}»?`)) return;
     try {
-      await api.eliminarAnalisis(a.id);
-      if (actual?.id === a.id) setActual(null);
+      await api.eliminarAnalisis(analisis.id);
+      if (actual?.id === analisis.id) setActual(null);
       cargarHistorial();
       toast.ok("Análisis eliminado");
-    } catch (e) {
-      toast.error("No se pudo eliminar", e.message);
+    } catch (error) {
+      toast.error("No se pudo eliminar", error.message);
     }
   };
 
@@ -231,7 +231,7 @@ export function Analisis() {
             <Segmented
               etiqueta="Tipo de análisis"
               valor={modo}
-              onChange={(v) => setModo(v)}
+              onChange={(nuevoModo) => setModo(nuevoModo)}
               opciones={[
                 { valor: "url", etiqueta: "URL" },
                 { valor: "archivo", etiqueta: "Archivo" },
@@ -241,16 +241,16 @@ export function Analisis() {
             {modo === "url" ? (
               <div className="field">
                 <label htmlFor="an-url">Dirección del sitio o enlace</label>
-                <input id="an-url" className="input" type="url" inputMode="url" placeholder="https://ejemplo.cl/descarga" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off" />
+                <input id="an-url" className="input" type="url" inputMode="url" placeholder="https://ejemplo.cl/descarga" value={url} onChange={(evento) => setUrl(evento.target.value)} autoComplete="off" />
                 <span className="hint">La reputación se consulta sin tocar el sitio. Las cabeceras de seguridad solo se leen si el sitio está en una red permitida (misma regla que las evaluaciones).</span>
               </div>
             ) : (
               <>
                 <div
                   className={`dropzone ${arrastrando ? "on" : ""} ${archivo ? "con-archivo" : ""}`}
-                  onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+                  onDragOver={(evento) => { evento.preventDefault(); setArrastrando(true); }}
                   onDragLeave={() => setArrastrando(false)}
-                  onDrop={(e) => { e.preventDefault(); setArrastrando(false); elegir(e.dataTransfer.files?.[0]); }}
+                  onDrop={(evento) => { evento.preventDefault(); setArrastrando(false); elegir(evento.dataTransfer.files?.[0]); }}
                 >
                   <Icon name={archivo ? "file" : "download"} size={26} />
                   {archivo ? (
@@ -258,11 +258,11 @@ export function Analisis() {
                   ) : (
                     <p>Arrastra un archivo aquí<br /><span className="small muted">o elígelo desde tu equipo (máx. {estado?.max_mb ?? 20} MB)</span></p>
                   )}
-                  <input ref={inputRef} id="an-archivo" type="file" className="visually-hidden" onChange={(e) => elegir(e.target.files?.[0])} />
+                  <input ref={inputRef} id="an-archivo" type="file" className="visually-hidden" onChange={(evento) => elegir(evento.target.files?.[0])} />
                   <button type="button" className="btn btn-sm" onClick={() => inputRef.current?.click()}>{archivo ? "Cambiar archivo" : "Elegir archivo"}</button>
                 </div>
                 <label className="check">
-                  <input type="checkbox" checked={subir} onChange={(e) => setSubir(e.target.checked)} />
+                  <input type="checkbox" checked={subir} onChange={(evento) => setSubir(evento.target.checked)} />
                   <span>
                     Si VirusTotal no conoce el archivo, permitir que lo reciba para analizarlo
                     <span className="hint block">Lo que se sube pasa a ser visible para la comunidad de seguridad. No lo marques con documentos privados. Si no lo marcas, solo se consulta su huella SHA-256.</span>
@@ -287,7 +287,7 @@ export function Analisis() {
             </div>
           )}
           {!enviando && !actual && <EmptyState icono="shield" titulo="Aún no hay un análisis" texto="El resultado aparece aquí en cuanto termina." />}
-          {actual && actual.estado !== "pendiente" && <Resultado a={actual} />}
+          {actual && actual.estado !== "pendiente" && <Resultado analisis={actual} />}
         </Panel>
       </div>
 
@@ -296,15 +296,15 @@ export function Analisis() {
           <EmptyState icono="clock" titulo="Sin análisis todavía" texto="Los que hagas quedarán registrados aquí." />
         ) : (
           <ul className="historial">
-            {historial.map((a) => (
-              <li key={a.id}>
-                <button className="historial-main" onClick={() => setActual(a)} aria-label={`Ver análisis de ${a.objetivo}`}>
-                  <Icon name={a.tipo === "url" ? "globe" : "file"} size={16} />
-                  <span className="historial-obj">{a.objetivo}</span>
-                  <Veredicto valor={a.veredicto || "sin_datos"} />
-                  <time className="small muted" dateTime={a.creado_en} title={fmtFechaHora(a.creado_en)}>{hace(a.creado_en)}</time>
+            {historial.map((analisis) => (
+              <li key={analisis.id}>
+                <button className="historial-main" onClick={() => setActual(analisis)} aria-label={`Ver análisis de ${analisis.objetivo}`}>
+                  <Icon name={analisis.tipo === "url" ? "globe" : "file"} size={16} />
+                  <span className="historial-obj">{analisis.objetivo}</span>
+                  <Veredicto valor={analisis.veredicto || "sin_datos"} />
+                  <time className="small muted" dateTime={analisis.creado_en} title={fmtFechaHora(analisis.creado_en)}>{hace(analisis.creado_en)}</time>
                 </button>
-                <button className="btn btn-quiet btn-icon btn-sm" onClick={() => eliminar(a)} aria-label={`Eliminar análisis de ${a.objetivo}`} title="Eliminar">
+                <button className="btn btn-quiet btn-icon btn-sm" onClick={() => eliminar(analisis)} aria-label={`Eliminar análisis de ${analisis.objetivo}`} title="Eliminar">
                   <Icon name="trash" size={15} />
                 </button>
               </li>

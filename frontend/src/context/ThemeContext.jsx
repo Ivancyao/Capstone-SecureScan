@@ -16,10 +16,10 @@ export function ThemeProvider({ children }) {
   const [sistemaOscuro, setSistemaOscuro] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    const fn = (e) => setSistemaOscuro(e.matches);
-    mq.addEventListener("change", fn);
-    return () => mq.removeEventListener("change", fn);
+    const consultaOscuro = matchMedia("(prefers-color-scheme: dark)");
+    const alCambiar = (evento) => setSistemaOscuro(evento.matches);
+    consultaOscuro.addEventListener("change", alCambiar);
+    return () => consultaOscuro.removeEventListener("change", alCambiar);
   }, []);
 
   const oscuro = preferencia === "oscuro" || (preferencia === "sistema" && sistemaOscuro);
@@ -27,10 +27,10 @@ export function ThemeProvider({ children }) {
     document.documentElement.setAttribute("data-theme", oscuro ? "dark" : "light");
   }, [oscuro]);
 
-  const elegir = useCallback((p) => {
-    setPreferencia(p);
+  const elegir = useCallback((nuevaPreferencia) => {
+    setPreferencia(nuevaPreferencia);
     try {
-      localStorage.setItem("securescan-tema", p);
+      localStorage.setItem("securescan-tema", nuevaPreferencia);
     } catch {
       /* ignorar */
     }

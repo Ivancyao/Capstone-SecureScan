@@ -24,12 +24,12 @@ def _cerrar_evaluaciones_huerfanas() -> None:
     """Si el servidor se reinició a mitad de un escaneo, esa evaluación no terminará nunca: se marca fallida."""
     db = SessionLocal()
     try:
-        for ev in db.query(Evaluacion).filter(
+        for evaluacion in db.query(Evaluacion).filter(
             Evaluacion.estado.in_([EstadoEvaluacion.PENDIENTE, EstadoEvaluacion.EN_PROGRESO])
         ):
-            ev.estado = EstadoEvaluacion.FALLIDA
-            ev.detalle_error = "El servidor se reinició mientras se ejecutaba la evaluación. Vuelve a lanzarla."
-            ev.etapa = "Falló"
+            evaluacion.estado = EstadoEvaluacion.FALLIDA
+            evaluacion.detalle_error = "El servidor se reinició mientras se ejecutaba la evaluación. Vuelve a lanzarla."
+            evaluacion.etapa = "Falló"
         db.commit()
     finally:
         db.close()

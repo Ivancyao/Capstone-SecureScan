@@ -11,19 +11,19 @@ import { fmtDuracion, fmtFecha, fmtFechaHora, hace } from "../lib/format.js";
 export function Activos() {
   useTitulo("Activos");
   const { data } = useData();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const [proyecto, setProyecto] = useState("");
-  const [q, setQ] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const [modal, setModal] = useState(false);
   const [vista, setVista] = useState(() => {
     try { return localStorage.getItem("securescan-vista-activos") || "tarjetas"; } catch { return "tarjetas"; }
   });
-  const cambiarVista = (v) => {
-    setVista(v);
-    try { localStorage.setItem("securescan-vista-activos", v); } catch { /* ignorar */ }
+  const cambiarVista = (nuevaVista) => {
+    setVista(nuevaVista);
+    try { localStorage.setItem("securescan-vista-activos", nuevaVista); } catch { /* ignorar */ }
   };
 
-  const lista = data.activos.filter((a) => (!proyecto || a.proyecto_id === proyecto) && (!q || `${a.nombre} ${a.url_objetivo}`.toLowerCase().includes(q.toLowerCase())));
+  const lista = data.activos.filter((activo) => (!proyecto || activo.proyecto_id === proyecto) && (!busqueda || `${activo.nombre} ${activo.url_objetivo}`.toLowerCase().includes(busqueda.toLowerCase())));
 
   return (
     <>
@@ -39,10 +39,10 @@ export function Activos() {
       ) : (
         <>
           <div className="filtros">
-            <input className="input" type="search" placeholder="Buscar por nombre o dirección" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar activos" />
-            <select className="select" value={proyecto} onChange={(e) => setProyecto(e.target.value)} aria-label="Filtrar por proyecto">
+            <input className="input" type="search" placeholder="Buscar por nombre o dirección" value={busqueda} onChange={(evento) => setBusqueda(evento.target.value)} aria-label="Buscar activos" />
+            <select className="select" value={proyecto} onChange={(evento) => setProyecto(evento.target.value)} aria-label="Filtrar por proyecto">
               <option value="">Todos los proyectos</option>
-              {data.proyectos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              {data.proyectos.map((proyectoDisponible) => <option key={proyectoDisponible.id} value={proyectoDisponible.id}>{proyectoDisponible.nombre}</option>)}
             </select>
             <span className="small muted">{lista.length} de {data.activos.length}</span>
             <span className="spacer" />
@@ -50,7 +50,7 @@ export function Activos() {
           </div>
           {vista === "tarjetas" ? (
             lista.length === 0 ? <p className="small muted">Ningún activo coincide con la búsqueda.</p> : (
-              <div className="cards">{lista.map((a) => <TarjetaActivo key={a.id} activo={a} />)}</div>
+              <div className="cards">{lista.map((activo) => <TarjetaActivo key={activo.id} activo={activo} />)}</div>
             )
           ) : (
           <div className="panel">
@@ -60,36 +60,36 @@ export function Activos() {
                   <tr><th>Activo</th><th>Proyecto</th><th>Exposición actual</th><th>Evolución</th><th>Última evaluación</th><th /></tr>
                 </thead>
                 <tbody>
-                  {lista.map((a) => (
-                    <tr key={a.id} onClick={() => nav(`/activos/${a.id}`)}>
+                  {lista.map((activo) => (
+                    <tr key={activo.id} onClick={() => navegar(`/activos/${activo.id}`)}>
                       <td className="celda-titulo">
-                        <Link to={`/activos/${a.id}`} onClick={(e) => e.stopPropagation()}>{a.nombre}</Link>
-                        <span className="sub mono">{a.url_objetivo}</span>
+                        <Link to={`/activos/${activo.id}`} onClick={(evento) => evento.stopPropagation()}>{activo.nombre}</Link>
+                        <span className="sub mono">{activo.url_objetivo}</span>
                       </td>
-                      <td>{a.proyecto?.nombre}</td>
+                      <td>{activo.proyecto?.nombre}</td>
                       <td>
-                        {a.ultimaOk ? (
+                        {activo.ultimaOk ? (
                           <div className="expo">
-                            <SeverityBar conteo={a.conteo} alto={10} />
-                            <SevBadge sev={a.maxSev} />
+                            <SeverityBar conteo={activo.conteo} alto={10} />
+                            <SevBadge sev={activo.maxSev} />
                           </div>
                         ) : (
                           <span className="muted small">Sin evaluar</span>
                         )}
                       </td>
-                      <td><Sparkline valores={a.serie} /></td>
+                      <td><Sparkline valores={activo.serie} /></td>
                       <td className="nowrap">
-                        {a.ultima ? (
+                        {activo.ultima ? (
                           <>
-                            <EstadoBadge estado={a.ultima.estado} />
-                            <span className="sub">{hace(a.ultima.iniciada_en)}</span>
+                            <EstadoBadge estado={activo.ultima.estado} />
+                            <span className="sub">{hace(activo.ultima.iniciada_en)}</span>
                           </>
                         ) : (
                           <span className="muted small">—</span>
                         )}
                       </td>
-                      <td className="right" onClick={(e) => e.stopPropagation()}>
-                        <EvaluarBoton activo={a} pequeno texto="Evaluar" />
+                      <td className="right" onClick={(evento) => evento.stopPropagation()}>
+                        <EvaluarBoton activo={activo} pequeno texto="Evaluar" />
                       </td>
                     </tr>
                   ))}
@@ -111,66 +111,66 @@ export function Activos() {
 export function ActivoDetalle() {
   const { id } = useParams();
   const { data } = useData();
-  const nav = useNavigate();
-  const a = data.activoPorId[id];
-  useTitulo(a?.nombre || "Activo");
-  if (!a) return <NoEncontrado que="El activo" volver="/activos" etiqueta="Ver activos" />;
+  const navegar = useNavigate();
+  const activo = data.activoPorId[id];
+  useTitulo(activo?.nombre || "Activo");
+  if (!activo) return <NoEncontrado que="El activo" volver="/activos" etiqueta="Ver activos" />;
 
   return (
     <>
       <PageHeader
-        migas={[{ texto: "Activos", to: "/activos" }, { texto: a.nombre }]}
-        titulo={a.nombre}
-        descripcion={a.descripcion}
-        acciones={<EvaluarBoton activo={a} grande />}
+        migas={[{ texto: "Activos", to: "/activos" }, { texto: activo.nombre }]}
+        titulo={activo.nombre}
+        descripcion={activo.descripcion}
+        acciones={<EvaluarBoton activo={activo} grande />}
       />
 
       <div className="row activo-url panel-gap">
         <Icon name="globe" size={16} />
-        <code>{a.url_objetivo}</code>
-        <CopiarBoton texto={a.url_objetivo} />
+        <code>{activo.url_objetivo}</code>
+        <CopiarBoton texto={activo.url_objetivo} />
       </div>
 
       <div className="grid-main panel-gap">
         <div className="stack">
           <Panel
             titulo="Mapa de puertos"
-            descripcion={a.ultimaOk ? `Resultado de la evaluación del ${fmtFechaHora(a.ultimaOk.iniciada_en)}` : "Aún no hay resultados"}
-            acciones={a.ultimaOk && <Link className="btn btn-sm" to={`/evaluaciones/${a.ultimaOk.id}`}>Ver evaluación</Link>}
+            descripcion={activo.ultimaOk ? `Resultado de la evaluación del ${fmtFechaHora(activo.ultimaOk.iniciada_en)}` : "Aún no hay resultados"}
+            acciones={activo.ultimaOk && <Link className="btn btn-sm" to={`/evaluaciones/${activo.ultimaOk.id}`}>Ver evaluación</Link>}
           >
-            {a.ultimaOk ? (
+            {activo.ultimaOk ? (
               <div className="stack-sm">
-                <PortMap hallazgos={a.ultimaOk.hallazgos} alSeleccionar={(h) => nav(`/hallazgos/${h.id}`)} />
+                <PortMap hallazgos={activo.ultimaOk.hallazgos} alSeleccionar={(hallazgo) => navegar(`/hallazgos/${hallazgo.id}`)} />
                 <LeyendaSev />
               </div>
             ) : (
-              <EmptyState icono="radar" titulo="Este activo no se ha evaluado" texto="Inicia una evaluación para ver qué puertos y servicios tiene expuestos." accion={<EvaluarBoton activo={a} />} />
+              <EmptyState icono="radar" titulo="Este activo no se ha evaluado" texto="Inicia una evaluación para ver qué puertos y servicios tiene expuestos." accion={<EvaluarBoton activo={activo} />} />
             )}
           </Panel>
 
-          {a.ultimaOk && (
-            <Panel titulo="Hallazgos abiertos" descripcion={`${a.abiertos.length} de ${a.ultimaOk.hallazgos.length} sin corregir`} flush>
-              <TablaHallazgos hallazgos={a.abiertos.map((h) => ({ ...h, activo: a, proyecto: a.proyecto }))} vacio="Todo corregido. Vuelve a evaluar para confirmarlo." />
+          {activo.ultimaOk && (
+            <Panel titulo="Hallazgos abiertos" descripcion={`${activo.abiertos.length} de ${activo.ultimaOk.hallazgos.length} sin corregir`} flush>
+              <TablaHallazgos hallazgos={activo.abiertos.map((hallazgo) => ({ ...hallazgo, activo, proyecto: activo.proyecto }))} vacio="Todo corregido. Vuelve a evaluar para confirmarlo." />
             </Panel>
           )}
         </div>
 
         <div className="stack">
           <Panel titulo="Exposición actual">
-            <ResumenSeveridad conteo={a.conteo} />
+            <ResumenSeveridad conteo={activo.conteo} />
           </Panel>
           <Panel titulo="Historial de evaluaciones" flush>
-            {a.evaluaciones.length === 0 ? (
+            {activo.evaluaciones.length === 0 ? (
               <p className="small muted tabla-vacia">Sin evaluaciones.</p>
             ) : (
               <ul className="rows">
-                {a.evaluaciones.map((e) => (
-                  <li key={e.id} className="clic" onClick={() => nav(`/evaluaciones/${e.id}`)}>
+                {activo.evaluaciones.map((evaluacion) => (
+                  <li key={evaluacion.id} className="clic" onClick={() => navegar(`/evaluaciones/${evaluacion.id}`)}>
                     <div className="grow">
-                      <Link to={`/evaluaciones/${e.id}`} className="titulo" onClick={(ev) => ev.stopPropagation()}>{fmtFecha(e.iniciada_en)}</Link>
-                      <span className="sub">{e.estado === "completada" ? `${e.conteo.total} hallazgos · ${fmtDuracion(e.iniciada_en, e.finalizada_en)}` : e.estado === "fallida" ? "No terminó" : "En curso"}</span>
+                      <Link to={`/evaluaciones/${evaluacion.id}`} className="titulo" onClick={(evento) => evento.stopPropagation()}>{fmtFecha(evaluacion.iniciada_en)}</Link>
+                      <span className="sub">{evaluacion.estado === "completada" ? `${evaluacion.conteo.total} hallazgos · ${fmtDuracion(evaluacion.iniciada_en, evaluacion.finalizada_en)}` : evaluacion.estado === "fallida" ? "No terminó" : "En curso"}</span>
                     </div>
-                    <EstadoBadge estado={e.estado} />
+                    <EstadoBadge estado={evaluacion.estado} />
                   </li>
                 ))}
               </ul>
@@ -178,9 +178,9 @@ export function ActivoDetalle() {
           </Panel>
           <Panel titulo="Detalles">
             <dl className="kv">
-              <dt>Proyecto</dt><dd><Link to={`/proyectos/${a.proyecto_id}`}>{a.proyecto?.nombre}</Link></dd>
-              <dt>Registrado</dt><dd>{fmtFecha(a.creado_en)}</dd>
-              <dt>Evaluaciones</dt><dd className="num">{a.evaluaciones.length}</dd>
+              <dt>Proyecto</dt><dd><Link to={`/proyectos/${activo.proyecto_id}`}>{activo.proyecto?.nombre}</Link></dd>
+              <dt>Registrado</dt><dd>{fmtFecha(activo.creado_en)}</dd>
+              <dt>Evaluaciones</dt><dd className="num">{activo.evaluaciones.length}</dd>
             </dl>
           </Panel>
         </div>

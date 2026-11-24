@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.models import Activo, EstadoEvaluacion, Evaluacion, Hallazgo, Proyecto, SeveridadHallazgo, Usuario
-from app.security import hash_password
+from app.security import hashear_contrasena
 from app.tiempo import ahora_utc
 
 client = TestClient(app)
@@ -31,7 +31,7 @@ def limpio():
 
 
 def usuario(db, email, rol="usuario"):
-    u = Usuario(nombre=email.split("@")[0].title(), email=email, password_hash=hash_password("Password123"), rol=rol)
+    u = Usuario(nombre=email.split("@")[0].title(), email=email, password_hash=hashear_contrasena("Password123"), rol=rol)
     db.add(u)
     db.commit()
     return u

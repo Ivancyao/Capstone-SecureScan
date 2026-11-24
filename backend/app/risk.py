@@ -39,32 +39,32 @@ def severidad_desde_cvss(cvss: float) -> SeveridadHallazgo:
 
 def _regla(puerto: int, servicio: str):
     """Devuelve (nombre, owasp, cvss_estimado, recomendación) según el servicio."""
-    s = servicio.lower()
-    if puerto == 23 or s == "telnet":
+    servicio_en_minuscula = servicio.lower()
+    if puerto == 23 or servicio_en_minuscula == "telnet":
         return ("Telnet expuesto (credenciales sin cifrar)", A02, 7.5,
                 "Deshabilitar Telnet y reemplazarlo por SSH con autenticación por llave.")
-    if puerto == 21 or s == "ftp":
+    if puerto == 21 or servicio_en_minuscula == "ftp":
         return ("FTP expuesto (tráfico sin cifrar)", A02, 5.3,
                 "Reemplazar FTP por SFTP o FTPS y restringir el acceso por IP.")
-    if puerto in (139, 445) or s in ("microsoft-ds", "netbios-ssn"):
+    if puerto in (139, 445) or servicio_en_minuscula in ("microsoft-ds", "netbios-ssn"):
         return ("SMB/NetBIOS expuesto", A05, 7.5,
                 "No exponer SMB fuera de la red interna; aplicar reglas de firewall.")
-    if puerto == 3389 or s == "ms-wbt-server":
+    if puerto == 3389 or servicio_en_minuscula == "ms-wbt-server":
         return ("Escritorio remoto (RDP) expuesto", A05, 7.5,
                 "Restringir RDP mediante VPN o lista de IP permitidas y exigir MFA.")
     if puerto in DB_PUERTOS:
         return (f"Base de datos expuesta ({DB_PUERTOS[puerto]})", A05, 7.5,
                 "Las bases de datos no deben ser accesibles desde la red; limitar a la capa de aplicación.")
-    if puerto == 22 or s == "ssh":
+    if puerto == 22 or servicio_en_minuscula == "ssh":
         return ("Servicio SSH expuesto", A05, 3.7,
                 "Deshabilitar login por contraseña, usar llaves y limitar IPs de origen.")
-    if puerto == 5900 or s == "vnc":
+    if puerto == 5900 or servicio_en_minuscula == "vnc":
         return ("VNC expuesto", A05, 7.5,
                 "No exponer VNC directamente; usar túnel SSH o VPN.")
-    if s.startswith("http") and "ssl" not in s and "https" not in s:
+    if servicio_en_minuscula.startswith("http") and "ssl" not in servicio_en_minuscula and "https" not in servicio_en_minuscula:
         return ("Servicio HTTP expuesto sin cifrado", A05, 5.3,
                 "Configurar HTTPS (TLS), redirigir HTTP a HTTPS y restringir servicios innecesarios.")
-    if "https" in s or "ssl" in s:
+    if "https" in servicio_en_minuscula or "ssl" in servicio_en_minuscula:
         return ("Servicio HTTPS expuesto", A05, 0.0,
                 "Verificar la configuración TLS (versiones y cifrados vigentes) y renovar certificados a tiempo.")
     return (f"Puerto {puerto}/tcp abierto ({servicio})", A05, 0.0,

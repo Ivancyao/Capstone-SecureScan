@@ -58,11 +58,11 @@ export function ResumenSeveridad({ conteo }) {
     <div className="stack-sm">
       <SeverityBar conteo={conteo} alto={16} />
       <ul className="sevlist">
-        {SEVERIDADES.map((s) => (
-          <li key={s} className={conteo[s] === 0 ? "cero" : ""}>
-            <SevBadge sev={s} />
-            <span className="sevlist-rango xs muted">CVSS {SEV[s].rango}</span>
-            <strong className="num">{conteo[s]}</strong>
+        {SEVERIDADES.map((severidad) => (
+          <li key={severidad} className={conteo[severidad] === 0 ? "cero" : ""}>
+            <SevBadge sev={severidad} />
+            <span className="sevlist-rango xs muted">CVSS {SEV[severidad].rango}</span>
+            <strong className="num">{conteo[severidad]}</strong>
           </li>
         ))}
       </ul>
@@ -72,8 +72,8 @@ export function ResumenSeveridad({ conteo }) {
 
 // ---------- Tabla de hallazgos (usada en panel, activo, evaluación y hallazgos) ----------
 export function TablaHallazgos({ hallazgos, mostrarActivo = false, mostrarFecha = false, vacio = "Sin hallazgos." }) {
-  const nav = useNavigate();
-  const orden = [...hallazgos].sort((a, b) => ordenSev(a.severidad) - ordenSev(b.severidad) || (b.cvss_score ?? 0) - (a.cvss_score ?? 0));
+  const navegar = useNavigate();
+  const orden = [...hallazgos].sort((primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0));
   if (!orden.length) return <p className="small muted tabla-vacia">{vacio}</p>;
   return (
     <div className="table-wrap">
@@ -90,23 +90,23 @@ export function TablaHallazgos({ hallazgos, mostrarActivo = false, mostrarFecha 
           </tr>
         </thead>
         <tbody>
-          {orden.map((h) => (
-            <tr key={h.id} onClick={() => nav(`/hallazgos/${h.id}`)}>
-              <td><SevBadge sev={h.severidad} /></td>
+          {orden.map((hallazgo) => (
+            <tr key={hallazgo.id} onClick={() => navegar(`/hallazgos/${hallazgo.id}`)}>
+              <td><SevBadge sev={hallazgo.severidad} /></td>
               <td className="celda-titulo">
-                <Link to={`/hallazgos/${h.id}`} onClick={(e) => e.stopPropagation()}>{h.nombre_vulnerabilidad}</Link>
-                <span className="sub mono">{h.evidencia}</span>
+                <Link to={`/hallazgos/${hallazgo.id}`} onClick={(evento) => evento.stopPropagation()}>{hallazgo.nombre_vulnerabilidad}</Link>
+                <span className="sub mono">{hallazgo.evidencia}</span>
               </td>
               {mostrarActivo && (
                 <td>
-                  {h.activo?.nombre}
-                  <span className="sub">{h.proyecto?.nombre}</span>
+                  {hallazgo.activo?.nombre}
+                  <span className="sub">{hallazgo.proyecto?.nombre}</span>
                 </td>
               )}
-              <td className="right num">{fmtCvss(h.cvss_score)}</td>
-              <td className="nowrap"><span title={h.categoria_owasp}>{owaspCodigo(h.categoria_owasp)}</span></td>
-              <td>{h.corregido === "si" ? <span className="tag tag-ok">Corregido</span> : <span className="tag">Abierto</span>}</td>
-              {mostrarFecha && <td className="nowrap">{fmtFecha(h.fecha)}</td>}
+              <td className="right num">{fmtCvss(hallazgo.cvss_score)}</td>
+              <td className="nowrap"><span title={hallazgo.categoria_owasp}>{owaspCodigo(hallazgo.categoria_owasp)}</span></td>
+              <td>{hallazgo.corregido === "si" ? <span className="tag tag-ok">Corregido</span> : <span className="tag">Abierto</span>}</td>
+              {mostrarFecha && <td className="nowrap">{fmtFecha(hallazgo.fecha)}</td>}
             </tr>
           ))}
         </tbody>
@@ -116,19 +116,19 @@ export function TablaHallazgos({ hallazgos, mostrarActivo = false, mostrarFecha 
   );
 }
 
-export const nombreHerramienta = (h) => HERRAMIENTAS[h] || h || "—";
+export const nombreHerramienta = (herramienta) => HERRAMIENTAS[herramienta] || herramienta || "—";
 
 // ---------- Botón para iniciar una evaluación y seguirla en vivo ----------
 export function EvaluarBoton({ activo, grande = false, pequeno = false, texto = "Evaluar ahora" }) {
   const { iniciarEvaluacion } = useData();
-  const nav = useNavigate();
+  const navegar = useNavigate();
   const [cargando, setCargando] = useState(false);
   const enCurso = activo.enCurso;
-  const ir = async () => {
+  const iniciar = async () => {
     setCargando(true);
     try {
-      const ev = await iniciarEvaluacion(activo.id);
-      nav(`/evaluaciones/${ev.id}`);
+      const evaluacion = await iniciarEvaluacion(activo.id);
+      navegar(`/evaluaciones/${evaluacion.id}`);
     } catch {
       /* el aviso de error ya se mostró */
     } finally {
@@ -143,7 +143,7 @@ export function EvaluarBoton({ activo, grande = false, pequeno = false, texto = 
     );
   }
   return (
-    <button className={`btn btn-primary ${pequeno ? "btn-sm" : ""} ${grande ? "btn-lg" : ""}`} onClick={ir} disabled={cargando}>
+    <button className={`btn btn-primary ${pequeno ? "btn-sm" : ""} ${grande ? "btn-lg" : ""}`} onClick={iniciar} disabled={cargando}>
       <Icon name="play" size={pequeno ? 13 : 15} />
       {cargando ? "Iniciando…" : texto}
     </button>
@@ -153,17 +153,17 @@ export function EvaluarBoton({ activo, grande = false, pequeno = false, texto = 
 // ---------- Formularios en diálogo ----------
 export function ProyectoModal({ abierto, onClose }) {
   const { crearProyecto } = useData();
-  const nav = useNavigate();
-  const [f, setF] = useState({ nombre: "", descripcion: "" });
+  const navegar = useNavigate();
+  const [formulario, setFormulario] = useState({ nombre: "", descripcion: "" });
   const [cargando, setCargando] = useState(false);
-  const enviar = async (e) => {
-    e.preventDefault();
+  const enviar = async (evento) => {
+    evento.preventDefault();
     setCargando(true);
     try {
-      const p = await crearProyecto(f);
-      setF({ nombre: "", descripcion: "" });
+      const proyecto = await crearProyecto(formulario);
+      setFormulario({ nombre: "", descripcion: "" });
       onClose();
-      nav(`/proyectos/${p.id}`);
+      navegar(`/proyectos/${proyecto.id}`);
     } catch {
       /* aviso mostrado */
     } finally {
@@ -185,10 +185,10 @@ export function ProyectoModal({ abierto, onClose }) {
     >
       <form id="form-proyecto" className="form-grid" onSubmit={enviar}>
         <Campo etiqueta="Nombre del proyecto">
-          {(id) => <input id={id} className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} minLength={2} maxLength={150} placeholder="Ej.: Sitio institucional" required />}
+          {(id) => <input id={id} className="input" value={formulario.nombre} onChange={(evento) => setFormulario({ ...formulario, nombre: evento.target.value })} minLength={2} maxLength={150} placeholder="Ej.: Sitio institucional" required />}
         </Campo>
         <Campo etiqueta="Descripción" ayuda="Opcional. Ayuda a otras personas a entender el alcance.">
-          {(id) => <textarea id={id} className="textarea" value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} />}
+          {(id) => <textarea id={id} className="textarea" value={formulario.descripcion} onChange={(evento) => setFormulario({ ...formulario, descripcion: evento.target.value })} />}
         </Campo>
       </form>
     </Modal>
@@ -198,16 +198,16 @@ export function ProyectoModal({ abierto, onClose }) {
 export function ActivoModal({ abierto, onClose, proyectoId }) {
   const { data, crearActivo } = useData();
   const toast = useToast();
-  const [f, setF] = useState({ proyecto_id: proyectoId || "", nombre: "", url_objetivo: "", descripcion: "" });
+  const [formulario, setFormulario] = useState({ proyecto_id: proyectoId || "", nombre: "", url_objetivo: "", descripcion: "" });
   const [cargando, setCargando] = useState(false);
-  const pid = proyectoId || f.proyecto_id;
-  const enviar = async (e) => {
-    e.preventDefault();
-    if (!pid) return toast.error("Elige un proyecto");
+  const idDelProyecto = proyectoId || formulario.proyecto_id;
+  const enviar = async (evento) => {
+    evento.preventDefault();
+    if (!idDelProyecto) return toast.error("Elige un proyecto");
     setCargando(true);
     try {
-      await crearActivo(pid, { nombre: f.nombre, url_objetivo: f.url_objetivo, descripcion: f.descripcion });
-      setF({ proyecto_id: proyectoId || "", nombre: "", url_objetivo: "", descripcion: "" });
+      await crearActivo(idDelProyecto, { nombre: formulario.nombre, url_objetivo: formulario.url_objetivo, descripcion: formulario.descripcion });
+      setFormulario({ proyecto_id: proyectoId || "", nombre: "", url_objetivo: "", descripcion: "" });
       onClose();
     } catch {
       /* aviso mostrado */
@@ -232,21 +232,21 @@ export function ActivoModal({ abierto, onClose, proyectoId }) {
         {!proyectoId && (
           <Campo etiqueta="Proyecto">
             {(id) => (
-              <select id={id} className="select" value={f.proyecto_id} onChange={(e) => setF({ ...f, proyecto_id: e.target.value })} required>
+              <select id={id} className="select" value={formulario.proyecto_id} onChange={(evento) => setFormulario({ ...formulario, proyecto_id: evento.target.value })} required>
                 <option value="">Elige un proyecto</option>
-                {data.proyectos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                {data.proyectos.map((proyecto) => <option key={proyecto.id} value={proyecto.id}>{proyecto.nombre}</option>)}
               </select>
             )}
           </Campo>
         )}
         <Campo etiqueta="Nombre del activo">
-          {(id) => <input id={id} className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} minLength={2} placeholder="Ej.: Portal de matrículas" required />}
+          {(id) => <input id={id} className="input" value={formulario.nombre} onChange={(evento) => setFormulario({ ...formulario, nombre: evento.target.value })} minLength={2} placeholder="Ej.: Portal de matrículas" required />}
         </Campo>
         <Campo etiqueta="URL o dirección del objetivo" ayuda="Debe estar en un entorno propio o autorizado. Ej.: http://10.0.0.5 o app.lab.local">
-          {(id) => <input id={id} className="input mono" value={f.url_objetivo} onChange={(e) => setF({ ...f, url_objetivo: e.target.value })} minLength={4} placeholder="http://juiceshop:3000" required />}
+          {(id) => <input id={id} className="input mono" value={formulario.url_objetivo} onChange={(evento) => setFormulario({ ...formulario, url_objetivo: evento.target.value })} minLength={4} placeholder="http://juiceshop:3000" required />}
         </Campo>
         <Campo etiqueta="Descripción">
-          {(id) => <textarea id={id} className="textarea" value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} />}
+          {(id) => <textarea id={id} className="textarea" value={formulario.descripcion} onChange={(evento) => setFormulario({ ...formulario, descripcion: evento.target.value })} />}
         </Campo>
       </form>
     </Modal>
@@ -254,23 +254,23 @@ export function ActivoModal({ abierto, onClose, proyectoId }) {
 }
 
 // ---------- Tarjetas (toda la tarjeta lleva al detalle; el botón de evaluar queda por encima) ----------
-export function TarjetaActivo({ activo: a, mostrarProyecto = true }) {
-  const nav = useNavigate();
+export function TarjetaActivo({ activo, mostrarProyecto = true }) {
+  const navegar = useNavigate();
   return (
-    <article className="card-i" style={{ "--tone": a.ultimaOk ? `var(--sev-${a.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => nav(`/activos/${a.id}`)}>
+    <article className="card-i" style={{ "--tone": activo.ultimaOk ? `var(--sev-${activo.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => navegar(`/activos/${activo.id}`)}>
       <header className="card-i-head">
         <div className="grow">
-          <Link to={`/activos/${a.id}`} className="titulo card-i-titulo" onClick={(e) => e.stopPropagation()}>{a.nombre}</Link>
-          <span className="sub mono">{a.url_objetivo}</span>
+          <Link to={`/activos/${activo.id}`} className="titulo card-i-titulo" onClick={(evento) => evento.stopPropagation()}>{activo.nombre}</Link>
+          <span className="sub mono">{activo.url_objetivo}</span>
         </div>
-        {a.ultimaOk ? <SevBadge sev={a.maxSev} /> : <span className="tag">Sin evaluar</span>}
+        {activo.ultimaOk ? <SevBadge sev={activo.maxSev} /> : <span className="tag">Sin evaluar</span>}
       </header>
-      {a.ultimaOk ? (
+      {activo.ultimaOk ? (
         <div className="card-i-datos">
-          <SeverityBar conteo={a.conteo} alto={8} />
+          <SeverityBar conteo={activo.conteo} alto={8} />
           <div className="card-i-fila">
-            <span className="small soft"><strong className="num">{a.conteo.total}</strong> {a.conteo.total === 1 ? "hallazgo abierto" : "hallazgos abiertos"}</span>
-            <Sparkline valores={a.serie} ancho={72} alto={22} />
+            <span className="small soft"><strong className="num">{activo.conteo.total}</strong> {activo.conteo.total === 1 ? "hallazgo abierto" : "hallazgos abiertos"}</span>
+            <Sparkline valores={activo.serie} ancho={72} alto={22} />
           </div>
         </div>
       ) : (
@@ -278,37 +278,37 @@ export function TarjetaActivo({ activo: a, mostrarProyecto = true }) {
       )}
       <footer className="card-i-pie">
         <span className="xs muted">
-          {mostrarProyecto && a.proyecto?.nombre ? `${a.proyecto.nombre} · ` : ""}
-          {a.ultima ? `evaluado ${hace(a.ultima.iniciada_en)}` : "sin evaluaciones"}
+          {mostrarProyecto && activo.proyecto?.nombre ? `${activo.proyecto.nombre} · ` : ""}
+          {activo.ultima ? `evaluado ${hace(activo.ultima.iniciada_en)}` : "sin evaluaciones"}
         </span>
-        <span className="card-i-accion" onClick={(e) => e.stopPropagation()}>
-          <EvaluarBoton activo={a} pequeno texto="Evaluar" />
+        <span className="card-i-accion" onClick={(evento) => evento.stopPropagation()}>
+          <EvaluarBoton activo={activo} pequeno texto="Evaluar" />
         </span>
       </footer>
     </article>
   );
 }
 
-export function TarjetaProyecto({ proyecto: p, dueno }) {
-  const nav = useNavigate();
+export function TarjetaProyecto({ proyecto, dueno }) {
+  const navegar = useNavigate();
   return (
-    <article className="card-i" style={{ "--tone": p.conteo.total > 0 ? `var(--sev-${p.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => nav(`/proyectos/${p.id}`)}>
+    <article className="card-i" style={{ "--tone": proyecto.conteo.total > 0 ? `var(--sev-${proyecto.maxSev || "informativa"})` : "var(--line-strong)" }} onClick={() => navegar(`/proyectos/${proyecto.id}`)}>
       <header className="card-i-head">
         <span className="icono-caja"><Icon name="folder" size={20} /></span>
         <div className="grow">
-          <Link to={`/proyectos/${p.id}`} className="titulo card-i-titulo" onClick={(e) => e.stopPropagation()}>{p.nombre}</Link>
-          <span className="sub">{p.descripcion || "Sin descripción"}</span>
+          <Link to={`/proyectos/${proyecto.id}`} className="titulo card-i-titulo" onClick={(evento) => evento.stopPropagation()}>{proyecto.nombre}</Link>
+          <span className="sub">{proyecto.descripcion || "Sin descripción"}</span>
         </div>
       </header>
       <div className="card-i-datos">
-        {p.conteo.total > 0 ? <SeverityBar conteo={p.conteo} alto={8} /> : <span className="xs muted">{p.activos.some((x) => x.ultimaOk) ? "Sin hallazgos abiertos" : "Sin datos de evaluación"}</span>}
+        {proyecto.conteo.total > 0 ? <SeverityBar conteo={proyecto.conteo} alto={8} /> : <span className="xs muted">{proyecto.activos.some((activo) => activo.ultimaOk) ? "Sin hallazgos abiertos" : "Sin datos de evaluación"}</span>}
         <div className="card-i-fila">
-          <span className="small soft">{plural(p.activos.length, "activo", "activos")}</span>
-          {p.conteo.total > 0 && <SevBadge sev={p.maxSev} />}
+          <span className="small soft">{plural(proyecto.activos.length, "activo", "activos")}</span>
+          {proyecto.conteo.total > 0 && <SevBadge sev={proyecto.maxSev} />}
         </div>
       </div>
       <footer className="card-i-pie">
-        <span className="xs muted">{p.ultima ? `última evaluación ${hace(p.ultima.iniciada_en)}` : "sin evaluaciones"}{dueno ? ` · de ${dueno}` : ""}</span>
+        <span className="xs muted">{proyecto.ultima ? `última evaluación ${hace(proyecto.ultima.iniciada_en)}` : "sin evaluaciones"}{dueno ? ` · de ${dueno}` : ""}</span>
         <Icon name="chevron-right" size={16} className="card-i-go" />
       </footer>
     </article>

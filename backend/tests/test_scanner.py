@@ -38,6 +38,8 @@ def test_extraer_host(entrada, esperado):
 def test_bloquea_objetivo_publico():
     with pytest.raises(scanner.ScanError):
         scanner.resolver_y_validar("8.8.8.8")
+    with pytest.raises(scanner.ScanError, match="link-local"):  # 169.254.169.254 = metadatos de la nube
+        scanner.resolver_y_validar("169.254.169.254", permitir_publicos=True)
 
 
 def test_permite_objetivo_privado_y_loopback():

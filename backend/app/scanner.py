@@ -58,7 +58,10 @@ def resolver_y_validar(host: str, permitir_publicos: Optional[bool] = None) -> s
     ips = []
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        es_laboratorio = ip.is_private or ip.is_loopback or ip.is_link_local
+        if ip.is_link_local:
+            # 169.254.0.0/16 incluye el servicio de metadatos de la nube (169.254.169.254): nunca es un objetivo válido.
+            raise ScanError(f"Objetivo bloqueado: {ip} es una dirección link-local (puede ser el servicio de metadatos de la nube).")
+        es_laboratorio = ip.is_private or ip.is_loopback
         if not es_laboratorio and not permitir_publicos:
             raise ScanError(
                 f"Objetivo bloqueado: {ip} no pertenece a una red privada. "
@@ -80,17 +83,17 @@ def parsear_xml_nmap(xml_texto: str) -> List[Dict]:
         state = port.find("state")
         if state is None or state.get("state") != "open":
             continue
-        svc = port.find("service")
+        elemento_servicio = port.find("service")
         resultados.append(
             {
                 "puerto": int(port.get("portid")),
                 "protocolo": port.get("protocol", "tcp"),
-                "servicio": (svc.get("name") if svc is not None else None) or "desconocido",
-                "producto": (svc.get("product") if svc is not None else None) or "",
-                "version": (svc.get("version") if svc is not None else None) or "",
+                "servicio": (elemento_servicio.get("name") if elemento_servicio is not None else None) or "desconocido",
+                "producto": (elemento_servicio.get("product") if elemento_servicio is not None else None) or "",
+                "version": (elemento_servicio.get("version") if elemento_servicio is not None else None) or "",
             }
         )
-    return sorted(resultados, key=lambda r: r["puerto"])
+    return sorted(resultados, key=lambda puerto_abierto: puerto_abierto["puerto"])
 
 
 def argumentos_de_puertos(perfil: Optional[str], puertos: Optional[str]) -> List[str]:

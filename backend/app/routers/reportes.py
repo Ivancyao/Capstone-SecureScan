@@ -18,48 +18,48 @@ from app.models import Activo, EstadoEvaluacion, Evaluacion, Proyecto, Reporte, 
 from app.reportes_pdf import generar_pdf
 from app.routers.proyectos import _get_proyecto_or_404
 from app.schemas import ReporteCreate, ReporteOut
-from app.security import get_current_user
+from app.security import obtener_usuario_actual
 
 router = APIRouter(tags=["Reportes"])
 
 
 def _directorio() -> Path:
-    d = Path(os.getenv("REPORTS_DIR", "./reportes_generados"))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    carpeta = Path(os.getenv("REPORTS_DIR", "./reportes_generados"))
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta
 
 
 def _slug(texto: str) -> str:
-    t = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-") or "informe"
+    texto_ascii = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", texto_ascii.lower()).strip("-") or "informe"
 
 
-def _reporte_o_404(db: Session, reporte_id: str, user: Usuario) -> Reporte:
-    r = db.query(Reporte).filter(Reporte.id == reporte_id).first()
-    if not r:
+def _reporte_o_404(db: Session, reporte_id: str, usuario: Usuario) -> Reporte:
+    reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
+    if not reporte:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
-    _get_proyecto_or_404(db, r.proyecto_id, user)
-    return r
+    _get_proyecto_or_404(db, reporte.proyecto_id, usuario)
+    return reporte
 
 
 @router.get("/reportes", response_model=List[ReporteOut])
-def listar_reportes(db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
-    q = db.query(Reporte)
-    if user.rol != RolUsuario.ADMIN:
-        ids = [p.id for p in db.query(Proyecto).filter(Proyecto.propietario_id == user.id).all()]
-        q = q.filter(Reporte.proyecto_id.in_(ids)) if ids else q.filter(False)
-    return q.order_by(Reporte.generado_en.desc()).all()
+def listar_reportes(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
+    consulta = db.query(Reporte)
+    if usuario.rol != RolUsuario.ADMIN:
+        ids = [proyecto.id for proyecto in db.query(Proyecto).filter(Proyecto.propietario_id == usuario.id).all()]
+        consulta = consulta.filter(Reporte.proyecto_id.in_(ids)) if ids else consulta.filter(False)
+    return consulta.order_by(Reporte.generado_en.desc()).all()
 
 
 @router.post("/proyectos/{proyecto_id}/reportes", response_model=ReporteOut, status_code=status.HTTP_201_CREATED)
 def crear_reporte(
     proyecto_id: str,
-    data: ReporteCreate,
+    datos: ReporteCreate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(obtener_usuario_actual),
 ):
-    proyecto = _get_proyecto_or_404(db, proyecto_id, user)
-    ids = list(dict.fromkeys(data.evaluacion_ids))  # sin repetidos, conservando el orden
+    proyecto = _get_proyecto_or_404(db, proyecto_id, usuario)
+    ids = list(dict.fromkeys(datos.evaluacion_ids))  # sin repetidos, conservando el orden
     evaluaciones = (
         db.query(Evaluacion)
         .join(Activo, Activo.id == Evaluacion.activo_id)
@@ -71,29 +71,29 @@ def crear_reporte(
     if any(e.estado != EstadoEvaluacion.COMPLETADA for e in evaluaciones):
         raise HTTPException(status_code=400, detail="Solo se pueden incluir evaluaciones completadas")
 
-    titulo = (data.titulo or "").strip() or f"Informe de seguridad — {proyecto.nombre}"
+    titulo = (datos.titulo or "").strip() or f"Informe de seguridad — {proyecto.nombre}"
     contenido = generar_pdf(
         {"nombre": proyecto.nombre},
         titulo,
-        user.nombre,
+        usuario.nombre,
         [
             {
-                "activo": {"nombre": e.activo.nombre, "url_objetivo": e.activo.url_objetivo},
-                "iniciada_en": e.iniciada_en,
+                "activo": {"nombre": evaluacion.activo.nombre, "url_objetivo": evaluacion.activo.url_objetivo},
+                "iniciada_en": evaluacion.iniciada_en,
                 "hallazgos": [
                     {
-                        "nombre_vulnerabilidad": h.nombre_vulnerabilidad,
-                        "severidad": h.severidad.value,
-                        "cvss_score": h.cvss_score,
-                        "categoria_owasp": h.categoria_owasp,
-                        "evidencia": h.evidencia,
-                        "recomendacion": h.recomendacion,
-                        "corregido": h.corregido,
+                        "nombre_vulnerabilidad": hallazgo.nombre_vulnerabilidad,
+                        "severidad": hallazgo.severidad.value,
+                        "cvss_score": hallazgo.cvss_score,
+                        "categoria_owasp": hallazgo.categoria_owasp,
+                        "evidencia": hallazgo.evidencia,
+                        "recomendacion": hallazgo.recomendacion,
+                        "corregido": hallazgo.corregido,
                     }
-                    for h in e.hallazgos
+                    for hallazgo in evaluacion.hallazgos
                 ],
             }
-            for e in sorted(evaluaciones, key=lambda e: e.iniciada_en)
+            for evaluacion in sorted(evaluaciones, key=lambda evaluacion: evaluacion.iniciada_en)
         ],
     )
 
@@ -101,7 +101,7 @@ def crear_reporte(
         proyecto_id=proyecto_id,
         titulo=titulo,
         nombre_archivo=f"informe-{_slug(proyecto.nombre)}.pdf",
-        generado_por=user.nombre,
+        generado_por=usuario.nombre,
         evaluacion_ids=ids,
         tamano_kb=max(1, round(len(contenido) / 1024)),
     )
@@ -113,18 +113,18 @@ def crear_reporte(
 
 
 @router.get("/reportes/{reporte_id}/descargar")
-def descargar_reporte(reporte_id: str, db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
-    r = _reporte_o_404(db, reporte_id, user)
-    ruta = _directorio() / f"{r.id}.pdf"
+def descargar_reporte(reporte_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
+    reporte = _reporte_o_404(db, reporte_id, usuario)
+    ruta = _directorio() / f"{reporte.id}.pdf"
     if not ruta.is_file():
         raise HTTPException(status_code=404, detail="El archivo del reporte ya no está disponible")
-    return FileResponse(ruta, media_type="application/pdf", filename=r.nombre_archivo)
+    return FileResponse(ruta, media_type="application/pdf", filename=reporte.nombre_archivo)
 
 
 @router.delete("/reportes/{reporte_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_reporte(reporte_id: str, db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
-    r = _reporte_o_404(db, reporte_id, user)
-    ruta = _directorio() / f"{r.id}.pdf"
-    db.delete(r)
+def eliminar_reporte(reporte_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
+    reporte = _reporte_o_404(db, reporte_id, usuario)
+    ruta = _directorio() / f"{reporte.id}.pdf"
+    db.delete(reporte)
     db.commit()
     ruta.unlink(missing_ok=True)

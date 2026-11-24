@@ -19,17 +19,17 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Activo, EstadoEvaluacion, Evaluacion, Hallazgo, SeveridadHallazgo, Usuario
 from app.routers.proyectos import _ids_de_proyectos_visibles
-from app.security import get_current_user
+from app.security import obtener_usuario_actual
 from app.tiempo import ahora_utc
 
 router = APIRouter(tags=["Métricas"])
 
-SEVERIDADES = [s.value for s in SeveridadHallazgo]  # critica, alta, media, baja, informativa
+SEVERIDADES = [severidad.value for severidad in SeveridadHallazgo]  # critica, alta, media, baja, informativa
 SEMANAS = 8
 
 
-def _lunes(d: date) -> date:
-    return d - timedelta(days=d.weekday())
+def _lunes(fecha: date) -> date:
+    return fecha - timedelta(days=fecha.weekday())
 
 
 def _como_fecha(valor) -> date:
@@ -37,8 +37,8 @@ def _como_fecha(valor) -> date:
 
 
 @router.get("/metricas")
-def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)) -> Dict:
-    ids = _ids_de_proyectos_visibles(db, user)
+def metricas(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)) -> Dict:
+    ids = _ids_de_proyectos_visibles(db, usuario)
     vacio = {
         "totales": {"proyectos": 0, "activos": 0, "evaluaciones": 0, "completadas": 0, "fallidas": 0, "en_curso": 0, "hallazgos_abiertos": 0, "hallazgos_corregidos": 0},
         "por_severidad": dict.fromkeys(SEVERIDADES, 0),
@@ -47,7 +47,7 @@ def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_
     }
     hoy_lunes = _lunes(ahora_utc().date())
     semanas = [hoy_lunes - timedelta(weeks=i) for i in range(SEMANAS - 1, -1, -1)]
-    vacio["por_semana"] = [{"inicio": s.isoformat(), **dict.fromkeys(SEVERIDADES, 0), "total": 0} for s in semanas]
+    vacio["por_semana"] = [{"inicio": semana.isoformat(), **dict.fromkeys(SEVERIDADES, 0), "total": 0} for semana in semanas]
     if not ids:
         return vacio
 
@@ -59,7 +59,7 @@ def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_
         .group_by(Evaluacion.estado)
         .all()
     )
-    n = lambda e: int(por_estado.get(e, 0))  # noqa: E731
+    cantidad_en_estado = lambda estado: int(por_estado.get(estado, 0))  # noqa: E731
 
     # ---- Última evaluación completada de cada activo (función de ventana) ----
     ranking = (
@@ -115,22 +115,22 @@ def metricas(db: Session = Depends(get_db), user: Usuario = Depends(get_current_
         .all()
     )
     por_semana: List[Dict] = vacio["por_semana"]
-    indice = {s["inicio"]: s for s in por_semana}
-    for d, sev, cuenta in filas:
-        bucket = indice.get(_lunes(_como_fecha(d)).isoformat())
-        if bucket:
-            bucket[sev.value] += int(cuenta)
-            bucket["total"] += int(cuenta)
+    indice = {semana_del_indice["inicio"]: semana_del_indice for semana_del_indice in por_semana}
+    for dia, severidad, cuenta in filas:
+        semana_actual = indice.get(_lunes(_como_fecha(dia)).isoformat())
+        if semana_actual:
+            semana_actual[severidad.value] += int(cuenta)
+            semana_actual["total"] += int(cuenta)
 
-    activos_n = db.query(func.count(Activo.id)).filter(Activo.proyecto_id.in_(ids)).scalar()
+    cantidad_de_activos = db.query(func.count(Activo.id)).filter(Activo.proyecto_id.in_(ids)).scalar()
     return {
         "totales": {
             "proyectos": len(ids),
-            "activos": int(activos_n),
+            "activos": int(cantidad_de_activos),
             "evaluaciones": sum(por_estado.values()),
-            "completadas": n(EstadoEvaluacion.COMPLETADA),
-            "fallidas": n(EstadoEvaluacion.FALLIDA),
-            "en_curso": n(EstadoEvaluacion.PENDIENTE) + n(EstadoEvaluacion.EN_PROGRESO),
+            "completadas": cantidad_en_estado(EstadoEvaluacion.COMPLETADA),
+            "fallidas": cantidad_en_estado(EstadoEvaluacion.FALLIDA),
+            "en_curso": cantidad_en_estado(EstadoEvaluacion.PENDIENTE) + cantidad_en_estado(EstadoEvaluacion.EN_PROGRESO),
             "hallazgos_abiertos": sum(por_severidad.values()),
             "hallazgos_corregidos": int(corregidos or 0),
         },
