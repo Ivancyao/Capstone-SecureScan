@@ -6,6 +6,7 @@ import { useData } from "../context/DataContext.jsx";
 import { compararEvaluaciones, evaluacionAnterior } from "../lib/comparar.js";
 import { fmtCvss, fmtFechaHora, plural } from "../lib/format.js";
 
+// Los cuatro resultados posibles de comparar dos evaluaciones: mejora, empeora, mixto o igual (lo calcula lib/comparar.js).
 const VEREDICTO = {
   mejora: { icono: "check-circle", clase: "ok", texto: "La exposición bajó respecto de la evaluación anterior." },
   empeora: { icono: "alert", clase: "warn", texto: "La exposición subió: aparecieron hallazgos nuevos o más graves." },
@@ -53,6 +54,7 @@ function Lista({ titulo, descripcion, filas, vacio, hrefDe, detalle }) {
   );
 }
 
+// Compara una evaluación con la anterior del mismo activo (o con otra que se elija) y muestra qué hallazgos son nuevos, cuáles se resolvieron y cuáles siguen.
 export function Comparar() {
   const { id } = useParams();
   const { data } = useData();
@@ -62,6 +64,7 @@ export function Comparar() {
   useTitulo(actual ? `Comparar ${actual.activo?.nombre}` : "Comparar evaluaciones");
   if (!actual) return <NoEncontrado que="La evaluación" volver="/evaluaciones" etiqueta="Ver evaluaciones" />;
 
+  // Solo se comparan evaluaciones completadas y del mismo activo; si no hay al menos dos, aviso que falta una.
   const completadas = data.evaluaciones.filter((evaluacion) => evaluacion.activo_id === actual.activo_id && evaluacion.estado === "completada");
   const base = (params.get("con") && data.evaluacionPorId[params.get("con")]) || evaluacionAnterior(data.evaluaciones, actual);
   const migas = [{ texto: "Evaluaciones", to: "/evaluaciones" }, { texto: actual.activo?.nombre || "Evaluación", to: `/evaluaciones/${actual.id}` }, { texto: "Comparar" }];
@@ -78,6 +81,7 @@ export function Comparar() {
   }
 
   // El orden cronológico lo decide la fecha, no el orden en que se eligieron
+  // Por si el usuario elige las evaluaciones al revés, ordeno por fecha para que siempre "antes" sea la más antigua.
   const [antes, despues] = new Date(base.iniciada_en) <= new Date(actual.iniciada_en) ? [base, actual] : [actual, base];
   const comparacion = compararEvaluaciones(antes, despues);
   const estiloVeredicto = VEREDICTO[comparacion.veredicto];

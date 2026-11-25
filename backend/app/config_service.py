@@ -17,6 +17,8 @@ from app.models import Configuracion
 from app.tiempo import ahora_utc
 
 CLAVE = "escaneo"
+# Estos son los rangos de red que considero "de laboratorio": las redes privadas clásicas y el loopback.
+# Se muestran en la pantalla de Configuración; la validación real la hace scanner.py con el módulo ipaddress.
 RANGOS_PERMITIDOS = [
     "10.0.0.0/8",
     "172.16.0.0/12",
@@ -24,6 +26,8 @@ RANGOS_PERMITIDOS = [
     "127.0.0.0/8",
 ]
 
+# Configuración que se usa mientras nadie la haya cambiado. Por seguridad parte con ZAP apagado y sin permitir IPs públicas.
+# Nikto aparece en la estructura, pero no está implementado: queda siempre apagado.
 POR_DEFECTO: Dict[str, Any] = {
     "motores": {
         "nmap": {
@@ -40,11 +44,13 @@ POR_DEFECTO: Dict[str, Any] = {
 }
 
 
+# Este es el candado del servidor: sale de la variable de entorno y no se puede cambiar desde la web.
 def servidor_permite_publicas() -> bool:
     """Candado del servidor (variable de entorno)."""
     return os.getenv("ALLOW_PUBLIC_SCANS", "false").lower() == "true"
 
 
+# Estos datos se calculan al momento (¿hay ZAP configurado?, rangos, candado del servidor). Se muestran en la web pero no se guardan en la BD.
 def _completar(configuracion: Dict[str, Any]) -> Dict[str, Any]:
     """Valores calculados que se muestran en la web pero no se guardan."""
     resultado = copy.deepcopy(configuracion)
@@ -56,6 +62,7 @@ def _completar(configuracion: Dict[str, Any]) -> Dict[str, Any]:
     return resultado
 
 
+# Mezcla la configuración por defecto con lo que haya guardado, así si agrego una opción nueva, las instalaciones antiguas igual la tienen.
 def _fusionar(base: Dict[str, Any], cambios: Dict[str, Any]) -> Dict[str, Any]:
     resultado = copy.deepcopy(base)
     for clave, valor in cambios.items():
@@ -72,6 +79,7 @@ def obtener(db: Session) -> Dict[str, Any]:
     return _completar(_fusionar(POR_DEFECTO, guardada))
 
 
+# Guardo solo los campos que se pueden editar; si alguien manda datos de más (por ejemplo los calculados), se descartan.
 def guardar(db: Session, configuracion: Dict[str, Any]) -> Dict[str, Any]:
     """Guarda solo lo que se puede cambiar (lo calculado se descarta)."""
     limpio = {
@@ -94,11 +102,14 @@ def guardar(db: Session, configuracion: Dict[str, Any]) -> Dict[str, Any]:
     return obtener(db)
 
 
+# Las IPs públicas solo se escanean si el servidor lo permite Y el administrador lo activó. Los dos candados tienen que estar abiertos.
 def publicas_efectivas(configuracion: Dict[str, Any]) -> bool:
     """Se escanean IP públicas solo si el servidor Y la configuración lo permiten."""
     return servidor_permite_publicas() and bool(configuracion["alcance"]["permitir_publicas"])
 
 
+# Política de retención: borra evaluaciones viejas. Nunca borra la última completada de cada activo, porque es su estado actual,
+# ni las que están corriendo. Con 0 días no borra nada.
 def aplicar_retencion(db: Session) -> int:
     """Borra las evaluaciones más antiguas que `retencion_dias`, pero nunca la última evaluación
     completada de cada activo (es su estado actual). Devuelve cuántas borró. 0 días = sin límite.
@@ -109,6 +120,7 @@ def aplicar_retencion(db: Session) -> int:
     if not dias:
         return 0
     limite = ahora_utc() - timedelta(days=dias)
+    # Como las ordené de la más nueva a la más antigua, la primera que aparece por activo es la vigente.
     vigentes = {}  # activo_id -> id de su evaluación completada más reciente
     for evaluacion in (
         db.query(Evaluacion)

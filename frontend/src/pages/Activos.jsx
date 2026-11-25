@@ -8,6 +8,7 @@ import { ActivoModal, CopiarBoton, EvaluarBoton, NoEncontrado, ResumenSeveridad,
 import { useData } from "../context/DataContext.jsx";
 import { fmtDuracion, fmtFecha, fmtFechaHora, hace } from "../lib/format.js";
 
+// Lista de activos (aplicaciones o servidores registrados) con filtro por proyecto, buscador y vista de tarjetas o tabla.
 export function Activos() {
   useTitulo("Activos");
   const { data } = useData();
@@ -15,6 +16,7 @@ export function Activos() {
   const [proyecto, setProyecto] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [modal, setModal] = useState(false);
+  // La vista elegida (tarjetas o tabla) se recuerda en localStorage. Es solo una comodidad; si falla, no pasa nada.
   const [vista, setVista] = useState(() => {
     try { return localStorage.getItem("securescan-vista-activos") || "tarjetas"; } catch { return "tarjetas"; }
   });
@@ -23,6 +25,7 @@ export function Activos() {
     try { localStorage.setItem("securescan-vista-activos", nuevaVista); } catch { /* ignorar */ }
   };
 
+  // Filtro en el navegador: por proyecto y por texto en el nombre o la URL.
   const lista = data.activos.filter((activo) => (!proyecto || activo.proyecto_id === proyecto) && (!busqueda || `${activo.nombre} ${activo.url_objetivo}`.toLowerCase().includes(busqueda.toLowerCase())));
 
   return (
@@ -108,6 +111,7 @@ export function Activos() {
   );
 }
 
+// Detalle de un activo: su estado actual, el mapa de puertos, los hallazgos abiertos y su historial de evaluaciones.
 export function ActivoDetalle() {
   const { id } = useParams();
   const { data } = useData();

@@ -25,15 +25,18 @@ from app.cancelacion import EvaluacionCancelada
 from app.zap_es import traducir
 
 
+# Todos los errores esperados al hablar con ZAP se convierten en este error, así scan_service los puede capturar sin romper la evaluación.
 class ZapError(Exception):
     """Error controlado al hablar con ZAP (no disponible, tiempo agotado, respuesta inesperada)."""
 
 
+# ZAP es opcional: solo lo considero disponible si en el .env está ZAP_URL.
 def disponible() -> bool:
     """ZAP está 'disponible' solo si el operador configuró su dirección (variable ZAP_URL)."""
     return bool(os.getenv("ZAP_URL"))
 
 
+# Cliente simple de la API REST de ZAP. Recibe el transporte y la función de espera por parámetro para poder probarlo en los tests sin ZAP real.
 class ZapClient:
     def __init__(
         self,
@@ -47,12 +50,14 @@ class ZapClient:
         if not self.base_url:
             raise ZapError("OWASP ZAP no está configurado en el servidor (falta ZAP_URL)")
         self.api_key = api_key if api_key is not None else os.getenv("ZAP_API_KEY", "")
+        # Timeout de 30 segundos por llamada, para no quedarme pegado si ZAP no responde.
         self._http = httpx.Client(base_url=self.base_url, timeout=30, transport=transport)
         self._dormir = dormir
         self._intervalo = intervalo
         self.cancelar: Optional[Callable[[], bool]] = None  # si devuelve True, se detiene el análisis
 
     # ---------- bajo nivel ----------
+    # Todas las llamadas a ZAP pasan por acá: agrego la API key, y traduzco cualquier falla a un ZapError con un mensaje claro.
     def _get(self, ruta: str, **params) -> Dict:
         if self.api_key:
             params["apikey"] = self.api_key
@@ -76,6 +81,7 @@ class ZapClient:
     def version(self) -> str:
         return str(self._get("/JSON/core/view/version/").get("version", "desconocida"))
 
+    # ZAP trabaja de forma asíncrona, así que hay que preguntar cada cierto tiempo si ya terminó. Acá además reviso si cancelaron y si se pasó del tiempo máximo.
     def _esperar(self, estado: Callable[[], bool], limite: float, que: str) -> None:
         inicio = time.monotonic()
         while not estado():
@@ -86,6 +92,7 @@ class ZapClient:
                 raise ZapError(f"OWASP ZAP superó el tiempo máximo mientras {que}")
             self._dormir(self._intervalo)
 
+    # Si cancelan, le aviso a ZAP que pare el spider y el escaneo activo. Si esto falla no importa, por eso el except vacío.
     def _detener(self) -> None:
         """Pide a ZAP que pare lo que esté haciendo (mejor esfuerzo: un fallo aquí no importa)."""
         for componente in ("spider", "ascan"):
@@ -95,6 +102,7 @@ class ZapClient:
                 pass
 
     # ---------- escaneo ----------
+    # Sirve tanto para el spider como para el escaneo activo: los lanzo y consulto su estado hasta que llegue a 100%.
     def _lanzar_y_esperar(self, componente: str, url: str, limite: float, que: str, **extra) -> None:
         respuesta = self._get(f"/JSON/{componente}/action/scan/", url=url, **extra)
         scan_id = respuesta.get("scan")
@@ -110,6 +118,7 @@ class ZapClient:
 
         self._esperar(terminado, limite, que)
 
+    # ZAP entrega las alertas de a páginas de 500; las voy pidiendo hasta que llegue una página incompleta.
     def alertas(self, url: str) -> List[Dict]:
         """Todas las alertas de ZAP para el objetivo, leídas por páginas."""
         todas, inicio, lote = [], 0, 500
@@ -120,6 +129,8 @@ class ZapClient:
                 return todas
             inicio += lote
 
+    # Flujo completo: spider (explora el sitio) -> esperar el análisis pasivo -> escaneo activo solo si está habilitado -> leer las alertas.
+    # El escaneo activo manda ataques de prueba, por eso viene apagado y solo lo activa un admin.
     def analizar(self, url: str, limite_s: int = 600, activo: bool = False) -> List[Dict]:
         """Ejecuta el análisis y devuelve los hallazgos ya agrupados (ver `agrupar_alertas`)."""
         self._lanzar_y_esperar("spider", url, limite_s, "exploraba el sitio", recurse="true")
@@ -134,6 +145,7 @@ class ZapClient:
 
 
 # ---------- traducción de alertas a hallazgos ----------
+# ZAP clasifica el riesgo con números del 0 al 3; yo los traduzco a mi escala de severidad.
 _RIESGO = {"3": "alta", "2": "media", "1": "baja", "0": "informativa"}
 # El API real de ZAP (core/view/alerts) entrega el nivel como texto en "risk" ("High", "Medium", ...);
 # algunos formatos de reporte traen además el código numérico en "riskcode". Se aceptan ambos.
@@ -148,7 +160,9 @@ def severidad_zap(alerta: Dict) -> str:
     texto = str(alerta.get("risk") or "").strip().lower()
     # ZAP a veces anota la confianza: "Medium (High)"; se usa solo el primer término
     return _RIESGO_TEXTO.get(texto.split(" ")[0], "informativa")
+# Igual que en risk.py, el CVSS de ZAP es estimado por nivel (alta 7.5, media 5.3, baja 3.1). ZAP no tiene nivel crítico.
 _CVSS_ESTIMADO = {"alta": 7.5, "media": 5.3, "baja": 3.1, "informativa": 0.0}
+# Los nombres oficiales de las 10 categorías del OWASP Top 10 2021.
 OWASP_2021 = {
     "A01": "A01:2021 - Broken Access Control",
     "A02": "A02:2021 - Cryptographic Failures",
@@ -164,6 +178,7 @@ OWASP_2021 = {
 _ETIQUETA = re.compile(r"<[^>]+>")
 
 
+# ZAP entrega la descripción en HTML; acá le saco las etiquetas y la acorto para que quede texto plano.
 def _limpio(texto: Optional[str], maximo: int) -> str:
     """ZAP entrega HTML en descripción y solución; se deja texto plano y acotado."""
     texto_limpio = _ETIQUETA.sub(" ", (texto or "").replace("</p>", "\n"))
@@ -172,6 +187,7 @@ def _limpio(texto: Optional[str], maximo: int) -> str:
     return texto_limpio if len(texto_limpio) <= maximo else texto_limpio[: maximo - 1].rstrip() + "…"
 
 
+# ZAP (desde la versión 2.11) etiqueta cada alerta con su categoría OWASP; la leo de ahí.
 def categoria_owasp(alerta: Dict) -> Optional[str]:
     """Busca etiquetas como 'OWASP_2021_A03' en la alerta (ZAP 2.11 en adelante)."""
     for etiqueta in (alerta.get("tags") or {}):
@@ -181,6 +197,8 @@ def categoria_owasp(alerta: Dict) -> Optional[str]:
     return None
 
 
+# ZAP puede devolver cientos de alertas del mismo tipo (una por URL). Yo las agrupo: un hallazgo por tipo, con la cantidad de instancias y 3 ejemplos.
+# Así el reporte queda legible.
 def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
     """
     ZAP devuelve una alerta por cada URL afectada (pueden ser cientos del mismo tipo). Se agrupan
@@ -206,6 +224,7 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
         if alerta.get("evidence"):
             evidencia += f". Evidencia: {_limpio(alerta['evidence'], 160)}"
         original = (alerta.get("alert") or alerta.get("name") or "Alerta de ZAP")
+        # Si la alerta está en mi catálogo en español (zap_es.py) uso esa traducción; si no, dejo el texto original en inglés y lo aviso.
         traduccion = traducir(alerta)
         if traduccion:
             nombre, desc, recomendacion = traduccion
@@ -228,5 +247,6 @@ def agrupar_alertas(alertas: List[Dict]) -> List[Dict]:
                 "herramienta_origen": "owasp_zap",
             }
         )
+    # Ordeno los hallazgos de más grave a menos grave.
     orden = {"alta": 0, "media": 1, "baja": 2, "informativa": 3}
     return sorted(hallazgos, key=lambda hallazgo: (orden[hallazgo["severidad"].value], hallazgo["nombre_vulnerabilidad"]))

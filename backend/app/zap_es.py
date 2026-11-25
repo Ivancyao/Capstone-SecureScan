@@ -13,6 +13,8 @@ Entrada = Tuple[str, str, str]
 
 _PROTEGER_CACHE = "Configurar Cache-Control con no-store, no-cache, must-revalidate y private para el contenido sensible."
 
+# Acá traduje yo las alertas más comunes de ZAP al español, porque ZAP entrega todo en inglés y el reporte es para usuarios en español.
+# Cada entrada es: nombre, descripción y recomendación. La clave es el nombre original de la alerta (en minúsculas).
 CATALOGO: Dict[str, Entrada] = {
     "content security policy (csp) header not set": (
         "Falta la cabecera Content-Security-Policy (CSP)",
@@ -201,6 +203,7 @@ CATALOGO: Dict[str, Entrada] = {
     ),
 }
 
+# Para comparar nombres ignoro mayúsculas y espacios de más.
 _ESPACIOS = re.compile(r"\s+")
 
 
@@ -208,6 +211,7 @@ def _clave(nombre: str) -> str:
     return _ESPACIOS.sub(" ", (nombre or "").replace("“", '"').replace("”", '"')).strip().lower()
 
 
+# Devuelve la traducción si la alerta está en el catálogo, o None si no (en ese caso se usa el texto original de ZAP).
 def traducir(alerta: Dict) -> Optional[Entrada]:
     """Devuelve (nombre, descripción, recomendación) en español si la alerta está en el catálogo."""
     return CATALOGO.get(_clave(alerta.get("alert") or alerta.get("name") or ""))

@@ -11,12 +11,15 @@ from app.models import EstadoEvaluacion, RolUsuario, SeveridadHallazgo
 
 
 # ---------- Auth / Usuarios ----------
+# Lo que se exige al registrarse: nombre de 2 a 120 caracteres, correo válido (EmailStr) y contraseña de mínimo 8.
+# Pydantic rechaza solo lo que no cumple, con un 422, antes de llegar a mi código.
 class UsuarioCreate(BaseModel):
     nombre: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
 
+# Lo que la API devuelve de un usuario. Ojo: acá NO está el password_hash, por eso nunca sale hacia el frontend.
 class UsuarioOut(BaseModel):
     id: str
     nombre: str
@@ -28,6 +31,7 @@ class UsuarioOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Respuesta del login.
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -37,11 +41,13 @@ class PerfilUpdate(BaseModel):
     nombre: str = Field(min_length=2, max_length=120)
 
 
+# Para cambiar la contraseña mando la actual y la nueva (mínimo 8).
 class PasswordCambio(BaseModel):
     actual: str = Field(min_length=1, max_length=128)
     nueva: str = Field(min_length=8, max_length=128)
 
 
+# Alta de usuario hecha por un admin.
 class UsuarioAdminCreate(BaseModel):
     """Alta de una cuenta por un administrador. Si no se indica contraseña, se genera una temporal."""
     nombre: str = Field(min_length=2, max_length=120)
@@ -50,16 +56,19 @@ class UsuarioAdminCreate(BaseModel):
     password: Optional[str] = Field(default=None, min_length=8, max_length=128)
 
 
+# Hereda de UsuarioOut y agrega la contraseña temporal, que solo se muestra esa vez.
 class UsuarioCreado(UsuarioOut):
     password_temporal: Optional[str] = None  # solo se devuelve una vez, al crearla
 
 
+# Un admin solo puede cambiar el rol o activar/desactivar. Nada más.
 class UsuarioUpdate(BaseModel):
     rol: Optional[RolUsuario] = None
     activo: Optional[bool] = None
 
 
 # ---------- Proyectos ----------
+# Entradas y salidas de proyectos y activos. Separo "Create" (lo que recibo) de "Out" (lo que devuelvo).
 class ProyectoCreate(BaseModel):
     nombre: str = Field(min_length=2, max_length=150)
     descripcion: Optional[str] = None
@@ -109,6 +118,7 @@ class HallazgoOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Lo único que se puede editar de un hallazgo es si está corregido ("si" o "no"). Literal rechaza cualquier otro valor.
 class HallazgoUpdate(BaseModel):
     corregido: Literal["si", "no"]
 
@@ -128,6 +138,7 @@ class EvaluacionOut(BaseModel):
 
 
 # ---------- Reportes ----------
+# Un reporte se arma con la lista de evaluaciones que el usuario eligió (entre 1 y 50).
 class ReporteCreate(BaseModel):
     titulo: Optional[str] = Field(default=None, max_length=200)
     evaluacion_ids: List[str] = Field(min_length=1, max_length=50)
@@ -146,12 +157,14 @@ class ReporteOut(BaseModel):
     model_config = {"from_attributes": True}
 
     @field_validator("evaluacion_ids", mode="before")
+    # Si el reporte no tiene evaluaciones guardadas devuelvo lista vacía en vez de None, para que el frontend no falle.
     @classmethod
     def _lista(cls, lista):
         return lista or []
 
 
 # ---------- Configuración ----------
+# Validación de la configuración: el timeout tiene un mínimo y un máximo para que nadie ponga valores absurdos.
 class NmapConfig(BaseModel):
     activo: bool
     puertos: Literal["predeterminado", "rapido", "completo"]
@@ -163,6 +176,7 @@ class MotorExterno(BaseModel):
     activo: bool = False
 
 
+# El escaneo activo de ZAP manda ataques de prueba, por eso parte apagado.
 class ZapConfig(BaseModel):
     activo: bool = False
     escaneo_activo: bool = False  # el escaneo activo envía ataques de prueba: apagado por defecto
@@ -176,6 +190,7 @@ class Motores(BaseModel):
     nikto: MotorExterno = MotorExterno()
 
 
+# Los campos calculados (rangos y candado del servidor) se aceptan pero se ignoran; el servidor los vuelve a calcular.
 class Alcance(BaseModel):
     permitir_publicas: bool
     # rangos y publicas_permitidas_por_servidor son calculados: se aceptan y se ignoran
@@ -190,6 +205,7 @@ class ConfiguracionIn(BaseModel):
 
 
 # ---------- Análisis de URL / archivo ----------
+# Para el análisis rápido solo acepto URLs que empiecen con http:// o https://.
 class AnalisisUrlIn(BaseModel):
     url: str = Field(min_length=4, max_length=2048)
 
@@ -218,6 +234,7 @@ class AnalisisOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# Le dice al frontend si VirusTotal está configurado y el tamaño máximo de archivo.
 class AnalisisEstado(BaseModel):
     virustotal: bool
     max_mb: int

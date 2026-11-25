@@ -9,12 +9,14 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useData } from "../context/DataContext.jsx";
 import { fmtFecha, fmtDuracion, hace, plural } from "../lib/format.js";
 
+// Lista de proyectos. Cada usuario ve los suyos; el admin ve todos y además se muestra el dueño de cada uno.
 export function Proyectos() {
   useTitulo("Proyectos");
   const { data } = useData();
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [modal, setModal] = useState(params.get("nuevo") === "1");
+  // Solo el admin recibe la lista de usuarios, así que solo a él se le muestra el nombre del dueño.
   const duenos = Object.fromEntries((data.usuarios || []).map((usuario) => [usuario.id, usuario.nombre]));
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function Proyectos() {
   );
 }
 
+// Detalle de un proyecto: sus activos, evaluaciones y reportes.
 export function ProyectoDetalle() {
   const { id } = useParams();
   const { data } = useData();

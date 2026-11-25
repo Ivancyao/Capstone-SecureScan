@@ -23,6 +23,7 @@ async function bajarPdf(reporte, toast) {
   }
 }
 
+// Ventana para generar un reporte: se elige el proyecto, un título (opcional) y las evaluaciones completadas que se quieren incluir.
 function GenerarModal({ abierto, onClose, proyectoInicial }) {
   const { data, crearReporte } = useData();
   const navegar = useNavigate();
@@ -35,6 +36,7 @@ function GenerarModal({ abierto, onClose, proyectoInicial }) {
     if (abierto) setProyectoId(proyectoInicial || data.proyectos[0]?.id || "");
   }, [abierto, proyectoInicial, data.proyectos]);
 
+  // Solo se ofrecen las evaluaciones completadas del proyecto elegido (el backend también lo valida).
   const evaluacionesDelProyecto = useMemo(() => data.evaluaciones.filter((evaluacion) => evaluacion.proyecto?.id === proyectoId && evaluacion.estado === "completada"), [data.evaluaciones, proyectoId]);
   // Por defecto, la evaluación más reciente de cada activo.
   useEffect(() => {
@@ -42,6 +44,7 @@ function GenerarModal({ abierto, onClose, proyectoInicial }) {
     setSeleccionadas(evaluacionesDelProyecto.filter((evaluacion) => (vistos.has(evaluacion.activo_id) ? false : vistos.add(evaluacion.activo_id))).map((evaluacion) => evaluacion.id));
   }, [evaluacionesDelProyecto]);
 
+  // Marca o desmarca una evaluación de la lista.
   const alternar = (id) => setSeleccionadas((actuales) => (actuales.includes(id) ? actuales.filter((otra) => otra !== id) : [...actuales, id]));
   const enviar = async (evento) => {
     evento.preventDefault();
@@ -104,6 +107,7 @@ function GenerarModal({ abierto, onClose, proyectoInicial }) {
   );
 }
 
+// Lista de reportes generados, con descarga del PDF y opción de eliminar (con confirmación).
 export function Reportes() {
   useTitulo("Reportes");
   const { data, eliminarReporte } = useData();
@@ -184,6 +188,7 @@ export function Reportes() {
 }
 
 // ---------- Vista del reporte (la misma maquetación que tendrá el PDF) ----------
+// Vista previa del reporte en pantalla: resumen, hallazgos priorizados y recomendaciones. El PDF oficial lo genera el servidor.
 export function ReporteVista() {
   const { id } = useParams();
   const { data } = useData();
@@ -194,6 +199,7 @@ export function ReporteVista() {
 
   const proyecto = data.proyectosPorId[reporte.proyecto_id];
   const evaluaciones = reporte.evaluacion_ids.map((evaluacionId) => data.evaluacionPorId[evaluacionId]).filter(Boolean);
+  // En el reporte solo cuento los hallazgos que siguen abiertos (los corregidos no entran al resumen).
   const hallazgos = evaluaciones.flatMap((evaluacion) => evaluacion.hallazgos.filter((hallazgo) => hallazgo.corregido !== "si").map((hallazgo) => ({ ...hallazgo, activo: evaluacion.activo })));
   const conteo = contar(hallazgos);
   const prioridad = [...hallazgos].sort((primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0));

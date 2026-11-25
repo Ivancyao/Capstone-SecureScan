@@ -27,15 +27,21 @@ from app.database import SessionLocal
 from app.models import Analisis
 from app.tiempo import ahora_utc
 
+# Dirección de la API v3 de VirusTotal. La clave (VIRUSTOTAL_API_KEY) vive solo en el servidor: el navegador nunca la ve.
 VT_BASE = "https://www.virustotal.com/api/v3"
+# Límite de tamaño de archivo: 20 MB por defecto, configurable en el .env.
 MAX_ARCHIVO_BYTES = int(os.getenv("ANALISIS_MAX_MB", "20")) * 1024 * 1024  # VirusTotal acepta hasta 32 MB
+# EICAR es un texto de prueba estándar que todos los antivirus detectan a propósito, pero es inofensivo. Lo uso para demostrar que el análisis funciona sin usar malware real.
 EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"  # archivo de prueba estándar, inofensivo
 
+# Listas que uso para detectar trucos como "factura.pdf.exe" (un ejecutable disfrazado de documento).
 EXTENSIONES_EJECUTABLES = {".exe", ".dll", ".scr", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".js", ".jar", ".sh", ".apk", ".lnk"}
 EXTENSIONES_DOCUMENTO = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".jpg", ".jpeg", ".png", ".gif", ".zip", ".rar"}
+# Acortadores de enlaces conocidos: ocultan el destino real, por eso los marco como señal.
 ACORTADORES = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "cutt.ly", "rb.gy"}
 
 
+# Errores esperables (sin clave, límite de la API, sin internet). El mensaje se le muestra tal cual al usuario.
 class AnalisisError(Exception):
     """Fallo esperable (clave ausente, límite de la API, red); el mensaje se muestra al usuario."""
 
@@ -49,6 +55,7 @@ def virustotal_configurado() -> bool:
     return bool(clave_virustotal())
 
 
+# Cliente de VirusTotal. Igual que con ZAP, recibe transporte y función de espera por parámetro para poder probarlo sin llamar a internet.
 class VirusTotal:
     def __init__(self, api_key: Optional[str] = None, transport: Optional[httpx.BaseTransport] = None,
                  dormir: Callable[[float], None] = time.sleep, espera_max: float = 90.0):
@@ -59,6 +66,7 @@ class VirusTotal:
         self._dormir = dormir
         self._espera_max = espera_max
 
+    # Todas las llamadas pasan por acá. Un 404 significa "VirusTotal no conoce esto" (no es un error); el 429 es el límite del plan gratis (4 consultas por minuto).
     def _pedir(self, metodo: str, ruta: str, **opciones) -> Optional[Dict]:
         try:
             respuesta = self._http.request(metodo, ruta, **opciones)
@@ -77,10 +85,12 @@ class VirusTotal:
         except ValueError:
             raise AnalisisError("Respuesta inesperada de VirusTotal.") from None
 
+    # VirusTotal identifica las URL por su base64 sin los "=" del final.
     @staticmethod
     def _id_url(url: str) -> str:
         return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
+    # Primero pregunto si VirusTotal ya conoce la URL o el archivo (gratis y rápido). Solo si no lo conoce, lo envío a analizar.
     def informe_url(self, url: str) -> Optional[Dict]:
         respuesta_json = self._pedir("GET", f"/urls/{self._id_url(url)}")
         return resumir_informe(respuesta_json) if respuesta_json else None
@@ -89,6 +99,7 @@ class VirusTotal:
         respuesta_json = self._pedir("GET", f"/files/{sha256}")
         return resumir_informe(respuesta_json) if respuesta_json else None
 
+    # El análisis de VirusTotal no es instantáneo: consulto cada 5 segundos hasta 90 segundos como máximo.
     def _esperar_analisis(self, analisis_id: str) -> Dict:
         inicio = time.monotonic()
         while True:
@@ -118,6 +129,7 @@ class VirusTotal:
         return self._esperar_analisis(analisis_id)
 
 
+# La respuesta de VirusTotal es enorme. Me quedo solo con lo que muestro: cuántos motores dicen malicioso, sospechoso, inofensivo, y los 15 primeros que detectaron algo.
 def resumir_informe(respuesta_json: Dict) -> Dict:
     """Reduce la respuesta de VirusTotal a lo que se muestra: conteos y los motores que detectaron algo."""
     atributos = (respuesta_json.get("data") or {}).get("attributes") or {}
@@ -140,6 +152,8 @@ def resumir_informe(respuesta_json: Dict) -> Dict:
     }
 
 
+# Así decido el veredicto: una señal local concluyente (EICAR) manda; si no, uso VirusTotal (3 o más motores = malicioso, 1 o 2 = sospechoso, 0 = limpio);
+# si VirusTotal no sabe nada, me baso en las señales locales. Nunca digo "seguro" a secas: "limpio" significa solo sin detecciones.
 def veredicto_de(informe_vt: Optional[Dict], senales: List[Dict]) -> str:
     """limpio | sospechoso | malicioso | sin_datos"""
     if any(senal["nivel"] == "alto" and senal.get("concluyente") for senal in senales):
@@ -156,10 +170,12 @@ def veredicto_de(informe_vt: Optional[Dict], senales: List[Dict]) -> str:
 
 
 # ---------------- Señales locales ----------------
+# Una "señal" es una pista local con su nivel de riesgo (bajo, medio, alto). No es un veredicto por sí sola.
 def sena(codigo: str, nivel: str, texto: str, concluyente: bool = False) -> Dict:
     return {"codigo": codigo, "nivel": nivel, "texto": texto, "concluyente": concluyente}
 
 
+# Reviso el archivo solo mirando su contenido en memoria: la firma EICAR, los primeros bytes (MZ = ejecutable de Windows, ELF = de Linux), la doble extensión y si la extensión no coincide con el contenido.
 def senales_archivo(nombre: str, contenido: bytes) -> List[Dict]:
     senales: List[Dict] = []
     if EICAR in contenido[:1024]:
@@ -181,6 +197,7 @@ def senales_archivo(nombre: str, contenido: bytes) -> List[Dict]:
     return senales
 
 
+# Pistas típicas de phishing: sin HTTPS, IP en vez de nombre, "@" en la URL, punycode, acortadores, muchos subdominios y URL muy larga.
 def senales_url(url: str) -> List[Dict]:
     senales: List[Dict] = []
     url_analizada = urlparse(url)
@@ -203,6 +220,7 @@ def senales_url(url: str) -> List[Dict]:
 
 
 # ---------------- Revisión pasiva de cabeceras ----------------
+# Cabeceras de seguridad que reviso: si faltan, el sitio queda más expuesto a ciertos ataques.
 CABECERAS = [
     ("content-security-policy", "Falta la política de seguridad de contenido (CSP)", "Reduce el impacto de ataques XSS."),
     ("x-content-type-options", "Falta X-Content-Type-Options: nosniff", "Evita que el navegador adivine tipos de archivo."),
@@ -210,6 +228,7 @@ CABECERAS = [
 ]
 
 
+# Esta es la única parte que contacta el sitio. Por eso le apliqué las mismas reglas que a los escaneos: solo redes permitidas, y se bloquea el propio servidor y las direcciones locales (protección SSRF).
 def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
     """Hace una sola petición GET para leer las cabeceras de seguridad. Si el objetivo no está permitido
     por las reglas de la plataforma, no se contacta y se explica por qué.
@@ -228,17 +247,20 @@ def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
         causa = str(exc).rstrip(". ")
         return {"contactado": False, "motivo": f"No se contactó el sitio. {causa}. La reputación (VirusTotal) sí se consulta sin tocar el sitio."}
 
+    # SSRF: si alguien pone una URL que apunta al propio servidor o al servicio de metadatos de la nube, no la contacto.
     ip_obj = ipaddress.ip_address(ip)
     if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_unspecified:
         # Evita que el análisis de una URL llegue al propio servidor o al servicio de metadatos de la nube (SSRF).
         return {"contactado": False, "motivo": "No se contactó el sitio: apunta al propio servidor o a una dirección local. La reputación (VirusTotal) sí se consulta sin tocar el sitio."}
 
     puerto = url_analizada.port or (443 if url_analizada.scheme == "https" else 80)
+    # Me conecto a la IP que ya validé (no al nombre) para que un DNS no pueda cambiar la respuesta entre la validación y la conexión.
     destino = f"{url_analizada.scheme}://{f'[{ip}]' if ':' in ip else ip}:{puerto}{url_analizada.path or '/'}"
     if url_analizada.query:
         destino += f"?{url_analizada.query}"
     propio = cliente is None
     # Se conecta a la IP ya validada (no al nombre), por eso se valida la IP y no el certificado.
+    # verify=False porque me conecto por IP y el certificado no coincidiría. No es un descuido: la validación que importa acá es la de la IP. Tampoco sigo redirecciones, para no saltar a otro destino.
     cliente = cliente or httpx.Client(timeout=8, verify=False, follow_redirects=False)  # nosec B501
     try:
         with cliente.stream("GET", destino, headers={"Host": url_analizada.netloc, "User-Agent": "SecureScan/1.2 (revision pasiva)"},
@@ -252,6 +274,7 @@ def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
         if propio:
             cliente.close()
 
+    # Ahora reviso qué cabeceras faltan, si hay HSTS, si el servidor revela su versión y si las cookies tienen HttpOnly y Secure.
     hallazgos: List[Dict] = []
     for nombre, titulo, porque in CABECERAS:
         if nombre not in cabeceras_respuesta:
@@ -273,6 +296,7 @@ def revisar_cabeceras(url: str, cliente: Optional[httpx.Client] = None) -> Dict:
 
 
 # ---------------- Orquestación ----------------
+# Cada actualización del análisis abre y cierra su propia sesión de BD. Si lo eliminaron mientras corría, no hago nada.
 def _guardar(analisis_id: str, **campos) -> None:
     db = SessionLocal()
     try:
@@ -286,6 +310,7 @@ def _guardar(analisis_id: str, **campos) -> None:
         db.close()
 
 
+# Texto corto que ve el usuario según el veredicto.
 def _frase(veredicto: str, informe_vt: Optional[Dict], con_vt: bool) -> str:
     if veredicto == "malicioso":
         return f"Peligroso: {informe_vt['malicioso']} motores antivirus lo marcan como malicioso." if informe_vt and informe_vt["malicioso"] >= 3 else "Peligroso: se detectó una firma de malware conocida."
@@ -299,6 +324,8 @@ def _frase(veredicto: str, informe_vt: Optional[Dict], con_vt: bool) -> str:
     return "Sin veredicto: VirusTotal no conoce este elemento todavía."
 
 
+# Orquestador del análisis rápido: señales locales -> VirusTotal (si hay clave) -> cabeceras (solo URLs) -> veredicto.
+# Nunca lanza una excepción hacia afuera: si algo falla, el análisis queda con estado "error" y un mensaje.
 def ejecutar_analisis(analisis_id: str, contenido: Optional[bytes] = None, subir: bool = False,
                       vt_cliente: Optional[VirusTotal] = None, cliente_http: Optional[httpx.Client] = None) -> None:
     """Corre en segundo plano con su propia sesión. Nunca lanza: los fallos quedan en el registro."""
@@ -323,6 +350,7 @@ def ejecutar_analisis(analisis_id: str, contenido: Optional[bytes] = None, subir
                     informe_vt = virustotal.informe_url(objetivo) or virustotal.enviar_url(objetivo)
                 else:
                     informe_vt = virustotal.informe_archivo(sha)
+                    # Un archivo solo se sube a VirusTotal si el usuario lo autoriza, porque lo que se sube lo puede ver la comunidad de seguridad.
                     if informe_vt is None and subir and contenido is not None:
                         informe_vt = virustotal.subir_archivo(objetivo, contenido)
                     elif informe_vt is None:
@@ -342,5 +370,6 @@ def ejecutar_analisis(analisis_id: str, contenido: Optional[bytes] = None, subir
                  resumen=f"No se pudo completar el análisis ({type(exc).__name__}).")
 
 
+# La huella SHA-256 identifica el archivo sin guardarlo.
 def sha256_de(contenido: bytes) -> str:
     return hashlib.sha256(contenido).hexdigest()

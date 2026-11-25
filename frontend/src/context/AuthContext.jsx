@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../services/index.js";
 
+// Contexto de la sesión: quién está logueado, y las funciones de entrar, registrarse y salir.
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
 
@@ -9,6 +10,7 @@ export function AuthProvider({ children }) {
   const [cargando, setCargando] = useState(true);
   const salidaManual = useRef(false); // si la persona cerró sesión a propósito, el login no recuerda la página anterior
 
+  // Al abrir la app, si hay un token guardado le pregunto al backend quién soy. Si el token ya no sirve, lo borro.
   useEffect(() => {
     if (!api.hayToken()) {
       setCargando(false);

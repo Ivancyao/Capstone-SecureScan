@@ -3,6 +3,7 @@ import { api } from "../services/index.js";
 import { derive } from "../services/derive.js";
 import { useToast } from "./ToastContext.jsx";
 
+// Contexto de los datos: trae todo desde la API, lo procesa con derive() y expone las acciones (crear proyecto, iniciar evaluación, etc.).
 const DataCtx = createContext(null);
 export const useData = () => useContext(DataCtx);
 
@@ -12,6 +13,7 @@ export function DataProvider({ children }) {
   const [error, setError] = useState(null);
   const previas = useRef(new Map()); // id evaluación -> estado, para avisar cuando termina
 
+  // Vuelve a pedir todo al backend. Se llama después de cada acción y mientras haya escaneos corriendo.
   const refrescar = useCallback(async () => {
     try {
       const instantanea = await api.snapshot();
@@ -27,6 +29,7 @@ export function DataProvider({ children }) {
   }, [refrescar]);
 
   const data = useMemo(() => derive(snap), [snap]);
+  // Cuando hay una evaluación en curso la web consulta el avance cada 2 segundos (polling). Cuando no hay ninguna, no consulta nada.
   const hayEnCurso = !!data && data.enCurso.length > 0;
 
   // Mientras hay un escaneo corriendo, se consulta el estado cada 2 segundos.
@@ -50,6 +53,7 @@ export function DataProvider({ children }) {
   }, [data, toast]);
 
   // Cada acción llama a la API, actualiza y avisa. Los errores vuelven a quien llamó.
+  // Envoltorio de todas las acciones: llama a la API, refresca los datos y muestra un aviso. Si falla, muestra el error y lo vuelve a lanzar.
   const accion = useCallback(
     (funcion, okTitulo) =>
       async (...args) => {

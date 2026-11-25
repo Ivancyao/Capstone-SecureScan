@@ -30,6 +30,7 @@ def limpio():
     Base.metadata.create_all(bind=engine)
 
 
+# Funciones auxiliares para crear usuarios y sembrar datos de prueba.
 def usuario(db, email, rol="usuario"):
     u = Usuario(nombre=email.split("@")[0].title(), email=email, password_hash=hashear_contrasena("Password123"), rol=rol)
     db.add(u)
@@ -42,6 +43,7 @@ def cab(email):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+# Siembra datos aleatorios pero con semilla fija, así el resultado es siempre el mismo.
 def sembrar(db, dueno, semilla=1, activos=6, evals_por_activo=5):
     """Datos aleatorios; devuelve las evaluaciones creadas para calcular el resultado esperado en Python."""
     rnd = random.Random(semilla)
@@ -70,6 +72,7 @@ def sembrar(db, dueno, semilla=1, activos=6, evals_por_activo=5):
     return todas
 
 
+# Cálculo independiente hecho en Python puro, para comparar contra el que hace SQL.
 def esperado(todas):
     """Cálculo independiente, en Python puro."""
     ultima = {}
@@ -88,6 +91,7 @@ def esperado(todas):
     return sev, owasp, corregidos
 
 
+# Es el test clave: las consultas GROUP BY del endpoint dan lo mismo que mi cálculo hecho a mano en Python.
 def test_sql_coincide_con_calculo_independiente():
     db = SessionLocal()
     admin = usuario(db, "admin@t.cl", "admin")
@@ -108,6 +112,7 @@ def test_sql_coincide_con_calculo_independiente():
         db.close()
 
 
+# La tendencia siempre trae 8 semanas y suma los hallazgos recientes.
 def test_semanas_son_ocho_y_suman_los_hallazgos_recientes():
     db = SessionLocal()
     admin = usuario(db, "admin@t.cl", "admin")
@@ -121,6 +126,7 @@ def test_semanas_son_ocho_y_suman_los_hallazgos_recientes():
     assert sum(s["total"] for s in m["por_semana"]) == esp
 
 
+# Cada usuario ve solo las métricas de sus proyectos.
 def test_cada_usuario_solo_ve_sus_metricas():
     db = SessionLocal()
     admin = usuario(db, "admin@t.cl", "admin")
@@ -136,6 +142,7 @@ def test_cada_usuario_solo_ve_sus_metricas():
     assert client.get("/metricas").status_code == 401
 
 
+# Al marcar un hallazgo como corregido, bajan los abiertos.
 def test_corregir_un_hallazgo_baja_los_abiertos():
     db = SessionLocal()
     admin = usuario(db, "admin@t.cl", "admin")

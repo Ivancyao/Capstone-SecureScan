@@ -6,6 +6,8 @@ import { PUERTOS_INTERES, SEV, ordenSev, puertoDeHallazgo } from "../lib/risk.js
 import { SevMark } from "./ui.jsx";
 import { TipLayer, useTip } from "./charts.jsx";
 
+// Une la lista de puertos de interés con los hallazgos reales: los que tienen hallazgo salen abiertos (con su severidad) y el resto cerrados.
+// Si un puerto tiene varios hallazgos, se queda el más grave.
 export function construirPuertos(hallazgos = []) {
   const abiertos = new Map();
   [...hallazgos].sort((primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad)).forEach((hallazgo) => {
@@ -28,6 +30,7 @@ export function construirPuertos(hallazgos = []) {
   return lista.sort((primero, segundo) => primero.puerto - segundo.puerto);
 }
 
+// Mapa de puertos: cada puerto es una "puerta". Si se le pasa `progreso`, anima el escaneo en vivo; si no, muestra el resultado final.
 export function PortMap({ hallazgos = [], puertos, progreso = null, compacto = false, alSeleccionar }) {
   const lista = useMemo(() => puertos || construirPuertos(hallazgos), [puertos, hallazgos]);
   const { tip, mover, enfocar, ocultar } = useTip();
@@ -91,6 +94,7 @@ export function PortMap({ hallazgos = [], puertos, progreso = null, compacto = f
 }
 
 // Versión animada para la portada: repite un escaneo de ejemplo.
+// Versión animada de la portada: repite un escaneo de ejemplo para mostrar cómo funciona.
 export function PortMapDemo({ hallazgos }) {
   const [porcentaje, setPorcentaje] = useState(0);
   useEffect(() => {

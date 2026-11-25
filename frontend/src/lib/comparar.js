@@ -2,6 +2,7 @@
 // Un hallazgo se identifica por su nombre: "Puerto 3306/tcp abierto (mysql)" o "Falta la política de seguridad de contenido (CSP)".
 import { ordenSev } from "./risk.js";
 
+// Dos hallazgos se consideran "el mismo" si tienen el mismo nombre (sin importar mayúsculas).
 const clave = (hallazgo) => (hallazgo.nombre_vulnerabilidad || "").trim().toLowerCase();
 
 // Si una evaluación repite un nombre, se conserva el más severo.
@@ -22,6 +23,8 @@ const porSeveridad = (primero, segundo) => ordenSev(primero.severidad) - ordenSe
  * @returns nuevos (solo en actual), resueltos (solo en base), persisten (en ambas, misma severidad),
  *          cambiaron (en ambas, distinta severidad: { antes, ahora, sube }) y el balance de hallazgos.
  */
+// Compara dos evaluaciones del mismo activo y separa los hallazgos en: nuevos, resueltos, que persisten y que cambiaron de severidad.
+// El veredicto final es "mejora", "empeora", "mixto" o "igual".
 export function compararEvaluaciones(base, actual) {
   const porClaveBase = indexar(base);
   const porClaveActual = indexar(actual);
@@ -59,6 +62,7 @@ export function compararEvaluaciones(base, actual) {
 }
 
 // Evaluación completada inmediatamente anterior a la dada, del mismo activo.
+// Busca la evaluación completada inmediatamente anterior, que es con la que se compara por defecto.
 export function evaluacionAnterior(evaluaciones = [], actual) {
   const previas = evaluaciones
     .filter((evaluacion) => evaluacion.activo_id === actual.activo_id && evaluacion.estado === "completada" && new Date(evaluacion.iniciada_en) < new Date(actual.iniciada_en))

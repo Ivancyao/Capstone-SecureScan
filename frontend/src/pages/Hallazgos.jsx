@@ -9,6 +9,7 @@ import { useToast } from "../context/ToastContext.jsx";
 import { fmtCvss, fmtFecha, fmtFechaHora, hace } from "../lib/format.js";
 import { HERRAMIENTAS, OWASP, SEV, SEVERIDADES, ordenSev, owaspCodigo, puertoDeHallazgo } from "../lib/risk.js";
 
+// Lista de hallazgos con filtros combinables: texto, severidad, herramienta, categoría OWASP y estado. Por defecto solo muestra los vigentes y abiertos.
 export function Hallazgos() {
   useTitulo("Hallazgos");
   const { data } = useData();
@@ -21,9 +22,11 @@ export function Hallazgos() {
   const [historico, setHistorico] = useState(false);
   const [orden, setOrden] = useState("severidad");
 
+  // "Vigente" = pertenece a la última evaluación completada de su activo. Con la opción histórico se ven también los antiguos.
   const base = data.hallazgos.filter((hallazgo) => historico || hallazgo.vigente);
   const porSev = Object.fromEntries(SEVERIDADES.map((severidad) => [severidad, base.filter((hallazgo) => hallazgo.severidad === severidad).length]));
 
+  // Aplico todos los filtros y el orden elegido (severidad, CVSS o fecha). useMemo evita recalcular si no cambió nada.
   const lista = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
     const resultado = base.filter(
@@ -106,6 +109,7 @@ export function Hallazgos() {
   );
 }
 
+// Detalle de un hallazgo: evidencia, recomendación, categoría OWASP, historial en las evaluaciones y botón para marcarlo como corregido.
 export function HallazgoDetalle() {
   const { id } = useParams();
   const { data, marcarCorregido } = useData();
@@ -127,6 +131,7 @@ export function HallazgoDetalle() {
     .reverse();
   const otros = (activo?.abiertos || []).filter((otro) => otro.id !== hallazgo.id).sort((otro, segundo) => ordenSev(otro.severidad) - ordenSev(segundo.severidad)).slice(0, 4);
 
+  // Marcar como corregido solo cambia el seguimiento. Para confirmar de verdad la corrección hay que volver a evaluar el activo (por eso lo aviso).
   const alternar = async () => {
     setCargando(true);
     try {

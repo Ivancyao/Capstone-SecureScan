@@ -1,3 +1,5 @@
+/* Estilos propios de cada pantalla (panel, hallazgos, informe, portada, acceso, análisis rápido) y la adaptación a pantallas chicas. */
+
 /* ---------- Utilidades de páginas ---------- */
 .panel-gap { margin-bottom: var(--gap); }
 .grow { flex: 1; min-width: 0; }
@@ -61,6 +63,7 @@
 .historia li.no .historia-dot { background: var(--st-completada); }
 
 /* Informe (maqueta del PDF) */
+/* El informe en pantalla simula una hoja blanca; por eso redefino los colores adentro para que se vea igual aunque esté el tema oscuro. */
 .doc { max-width: 860px; margin: 0 auto; padding: 56px 64px; background: #fff; color: #0f1d2c; border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: 0 1px 2px rgba(11, 32, 56, 0.06); display: grid; gap: 34px; --ink: #0f1d2c; --ink-2: #3b4959; --ink-3: #5f6e82; --surface: #ffffff; --surface-2: #f5f7fa; --surface-3: #e9eef4; --line: #dce2e9; --line-strong: #bfc9d5; --sev-critica: #c0261b; --sev-alta: #e06a1b; --sev-media: #e3a400; --sev-baja: #3e9b63; --sev-informativa: #8493a6; --sev-critica-bg: #fce9e7; --sev-alta-bg: #fdecdf; --sev-media-bg: #fcf3d3; --sev-baja-bg: #e3f3ea; --sev-informativa-bg: #eaeef3; }
 .doc-portada { padding-bottom: 28px; border-bottom: 3px solid #0b2038; }
 .doc-marca { font-size: var(--t-sm); font-weight: 600; color: #3b54e0; margin-bottom: 14px; }

@@ -5,6 +5,8 @@ const corta = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short" 
 // El servidor guarda las fechas en UTC y las envía sin zona horaria ("2026-11-13T12:51:00").
 // Sin esta función, el navegador las leería como hora local y mostraría 3 horas de más en Chile.
 // Si el texto ya trae zona ("Z" o "+00:00"), se respeta tal cual.
+// Detalle que me costó descubrir: el servidor manda las fechas en UTC pero sin la "Z", entonces el navegador las lee como hora local y mostraba 3 horas de más.
+// Esta función agrega la Z cuando falta.
 export const aFecha = (iso) => {
   if (iso instanceof Date) return iso;
   const texto = String(iso);
@@ -15,6 +17,7 @@ export const fmtFecha = (iso) => (iso ? fecha.format(aFecha(iso)) : "—");
 export const fmtFechaHora = (iso) => (iso ? fechaHora.format(aFecha(iso)) : "—");
 export const fmtFechaCorta = (iso) => (iso ? corta.format(aFecha(iso)) : "—");
 
+// Texto relativo: "hace 5 min", "hace 2 días"...
 export function hace(iso) {
   if (!iso) return "—";
   const segundos = Math.max(0, (Date.now() - aFecha(iso).getTime()) / 1000);
@@ -36,6 +39,7 @@ export function fmtDuracion(inicio, fin) {
   return `${Math.floor(segundos / 60)} min ${segundos % 60} s`;
 }
 
+// El CVSS se muestra con una coma decimal (7,5), como se escribe en Chile.
 export const fmtCvss = (numero) => (numero == null ? "—" : Number(numero).toFixed(1).replace(".", ","));
 export const plural = (cantidad, uno, varios) => `${cantidad} ${cantidad === 1 ? uno : varios}`;
 export const iniciales = (nombre = "") =>
@@ -60,10 +64,11 @@ export function uid() {
 }
 
 // ¿El host está en un rango que SecureScan permite escanear? (mismo criterio que el backend)
+// Aviso en el formulario: me dice si el objetivo parece de laboratorio. Es solo una ayuda visual; la validación de verdad la hace el backend.
 export function esHostPrivado(host = "") {
   if (!host) return false;
   if (host === "localhost") return true;
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(host) || !host.includes(".");
   const [primerOcteto, segundoOcteto] = host.split(".").map(Number);
-  return primerOcteto === 10 || primerOcteto === 127 || (primerOcteto === 172 && segundoOcteto >= 16 && segundoOcteto <= 31) || (primerOcteto === 192 && segundoOcteto === 168) || (primerOcteto === 169 && segundoOcteto === 254);
+  return primerOcteto === 10 || primerOcteto === 127 || (primerOcteto === 172 && segundoOcteto >= 16 && segundoOcteto <= 31) || (primerOcteto === 192 && segundoOcteto === 168);
 }

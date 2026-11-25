@@ -10,6 +10,7 @@ import { useData } from "../context/DataContext.jsx";
 import { fmtFechaHora, hace, plural } from "../lib/format.js";
 import { SEVERIDADES } from "../lib/risk.js";
 
+// Pantalla principal. Resume el estado de seguridad: cifras clave, evaluaciones en curso, tendencia semanal, ranking OWASP y los activos que más atención necesitan.
 export default function Panel_() {
   useTitulo("Panel");
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function Panel_() {
   const [modal, setModal] = useState(false);
   const nombre = user?.nombre?.split(" ")[0] || "";
 
+  // Estado vacío: si todavía no hay proyectos, en vez de un panel con ceros le explico qué hacer primero.
   if (data.proyectos.length === 0) {
     return (
       <>
@@ -35,8 +37,10 @@ export default function Panel_() {
     );
   }
 
+  // Todos estos números ya vienen calculados por derive.js (a partir de /metricas en el backend); acá solo los muestro.
   const { conteoGlobal, activosAtencion, enCurso, evaluaciones, porOwasp, semanas } = data;
   const masExpuesto = activosAtencion[0];
+  // Cuento los activos que ya tienen al menos una evaluación completada.
   const evaluados = data.activos.filter((activo) => activo.ultimaOk).length;
 
   return (

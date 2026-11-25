@@ -24,10 +24,12 @@ from app.tiempo import ahora_utc
 
 router = APIRouter(tags=["Métricas"])
 
+# Las 5 severidades en el orden en que las muestra el gráfico.
 SEVERIDADES = [severidad.value for severidad in SeveridadHallazgo]  # critica, alta, media, baja, informativa
 SEMANAS = 8
 
 
+# Para agrupar por semana uso el lunes de cada fecha.
 def _lunes(fecha: date) -> date:
     return fecha - timedelta(days=fecha.weekday())
 
@@ -36,9 +38,11 @@ def _como_fecha(valor) -> date:
     return valor if isinstance(valor, date) and not isinstance(valor, datetime) else date.fromisoformat(str(valor)[:10])
 
 
+# Alimenta el Panel. Todo se calcula en la base de datos con GROUP BY (no traigo miles de filas a Python para contarlas).
 @router.get("/metricas")
 def metricas(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)) -> Dict:
     ids = _ids_de_proyectos_visibles(db, usuario)
+    # Armo primero una respuesta "vacía" con las 8 últimas semanas; si el usuario no tiene proyectos, devuelvo esto y listo.
     vacio = {
         "totales": {"proyectos": 0, "activos": 0, "evaluaciones": 0, "completadas": 0, "fallidas": 0, "en_curso": 0, "hallazgos_abiertos": 0, "hallazgos_corregidos": 0},
         "por_severidad": dict.fromkeys(SEVERIDADES, 0),
@@ -61,6 +65,7 @@ def metricas(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_u
     )
     cantidad_en_estado = lambda estado: int(por_estado.get(estado, 0))  # noqa: E731
 
+    # Solo cuenta como riesgo actual la ÚLTIMA evaluación completada de cada activo; las anteriores son historial.
     # ---- Última evaluación completada de cada activo (función de ventana) ----
     ranking = (
         db.query(
@@ -73,6 +78,7 @@ def metricas(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_u
     )
     vigentes = db.query(ranking.c.id).filter(ranking.c.rn == 1).subquery()
 
+    # Un hallazgo está "abierto" si no fue marcado como corregido.
     abierto = or_(Hallazgo.corregido.is_(None), Hallazgo.corregido != "si")
 
     # ---- GROUP BY severidad (hallazgos abiertos vigentes) ----
@@ -104,6 +110,7 @@ def metricas(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_u
     ]
 
     # ---- GROUP BY día y severidad; luego se agrupa en semanas ----
+    # Para la tendencia agrupo por día y severidad en la base, y después sumo los días en semanas (lunes a domingo).
     desde = datetime.combine(semanas[0], datetime.min.time())
     dia = func.date(Evaluacion.iniciada_en)
     filas = (

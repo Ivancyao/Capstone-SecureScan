@@ -24,6 +24,7 @@ client = TestClient(app)
 PWD = "Password123"
 
 
+# Cada test parte con una base limpia y una carpeta temporal para los PDF.
 @pytest.fixture(autouse=True)
 def entorno(tmp_path, monkeypatch):
     Base.metadata.drop_all(bind=engine)
@@ -33,6 +34,7 @@ def entorno(tmp_path, monkeypatch):
     yield
 
 
+# Funciones auxiliares: registran usuarios y devuelven la cabecera con el token.
 def registrar(email, nombre="Persona"):
     return client.post("/auth/register", json={"nombre": nombre, "email": email, "password": PWD})
 
@@ -42,6 +44,7 @@ def cabecera(email, password=PWD):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+# El primer usuario que se registra queda como ADMIN; "ana" es un usuario normal.
 @pytest.fixture
 def admin():
     registrar("admin@t.cl", "Admin")  # el primero queda como admin
@@ -54,12 +57,14 @@ def ana(admin):
     return cabecera("ana@t.cl")
 
 
+# Crea un activo de prueba por la API.
 def crear_activo(h, nombre="DVWA", url="http://dvwa.local"):
     p = client.post("/proyectos", json={"nombre": "Lab " + nombre}, headers=h).json()
     a = client.post(f"/proyectos/{p['id']}/activos", json={"nombre": nombre, "url_objetivo": url}, headers=h).json()
     return p, a
 
 
+# Inserta directo en la BD una evaluación ya completada (con sus hallazgos), sin pasar por Nmap.
 def evaluacion_completada(activo_id, hallazgos=(("Telnet expuesto", "alta", 7.5),), hace_dias=0):
     db = SessionLocal()
     ev = Evaluacion(
@@ -81,6 +86,7 @@ def evaluacion_completada(activo_id, hallazgos=(("Telnet expuesto", "alta", 7.5)
 
 
 # ---------------- Hallazgos ----------------
+# Un hallazgo se puede marcar como corregido y reabrir.
 def test_marcar_hallazgo_corregido_y_reabrir(admin):
     _, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -91,6 +97,7 @@ def test_marcar_hallazgo_corregido_y_reabrir(admin):
     assert client.patch(f"/hallazgos/{hid}", json={"corregido": "no"}, headers=admin).json()["corregido"] == "no"
 
 
+# Un valor inválido da error, y no se puede editar un hallazgo ajeno.
 def test_hallazgo_valor_invalido_y_ajeno(admin, ana):
     _, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -101,6 +108,7 @@ def test_hallazgo_valor_invalido_y_ajeno(admin, ana):
     assert client.patch("/hallazgos/no-existe", json={"corregido": "si"}, headers=admin).status_code == 404
 
 
+# El hallazgo trae el id de su evaluación (lo usa el frontend).
 def test_hallazgo_incluye_evaluacion_id(admin):
     _, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -108,6 +116,7 @@ def test_hallazgo_incluye_evaluacion_id(admin):
 
 
 # ---------------- Usuarios y roles ----------------
+# La gestión de usuarios es solo para admin: un usuario normal recibe 403.
 def test_usuarios_solo_admin(admin, ana):
     assert client.get("/usuarios", headers=ana).status_code == 403
     assert client.post("/usuarios", json={"nombre": "X Y", "email": "x@t.cl"}, headers=ana).status_code == 403
@@ -117,6 +126,7 @@ def test_usuarios_solo_admin(admin, ana):
     assert all("password" not in u and "password_hash" not in u for u in lista)
 
 
+# El admin puede crear usuarios y recibe la contraseña temporal solo una vez.
 def test_admin_crea_usuario_con_password_temporal(admin):
     r = client.post("/usuarios", json={"nombre": "Luis Perez", "email": "luis@t.cl", "rol": "analista"}, headers=admin)
     assert r.status_code == 201
@@ -129,6 +139,7 @@ def test_admin_crea_usuario_con_password_temporal(admin):
     assert client.post("/usuarios", json={"nombre": "Luis Dos", "email": "luis@t.cl"}, headers=admin).status_code == 400
 
 
+# El admin cambia roles y desactiva cuentas; una cuenta desactivada no puede iniciar sesión.
 def test_cambiar_rol_y_desactivar(admin, ana):
     uid = next(u["id"] for u in client.get("/usuarios", headers=admin).json() if u["email"] == "ana@t.cl")
     assert client.patch(f"/usuarios/{uid}", json={"rol": "analista"}, headers=admin).json()["rol"] == "analista"
@@ -145,6 +156,7 @@ def test_cambiar_rol_y_desactivar(admin, ana):
     assert client.post("/auth/login", data={"username": "ana@t.cl", "password": PWD}).status_code == 200
 
 
+# El admin no puede cambiar su propio rol ni desactivarse.
 def test_admin_no_puede_cambiarse_a_si_mismo(admin):
     yo = client.get("/auth/me", headers=admin).json()
     assert client.patch(f"/usuarios/{yo['id']}", json={"rol": "usuario"}, headers=admin).status_code == 400
@@ -153,6 +165,7 @@ def test_admin_no_puede_cambiarse_a_si_mismo(admin):
 
 
 # ---------------- Perfil ----------------
+# El usuario edita su nombre y cambia su contraseña (pidiendo la actual).
 def test_editar_nombre_y_cambiar_password(ana):
     assert client.patch("/auth/me", json={"nombre": "Ana María"}, headers=ana).json()["nombre"] == "Ana María"
     assert client.patch("/auth/me", json={"nombre": "A"}, headers=ana).status_code == 422
@@ -164,6 +177,7 @@ def test_editar_nombre_y_cambiar_password(ana):
 
 
 # ---------------- Configuración ----------------
+# La configuración parte con valores seguros por defecto; leerla es de cualquiera, cambiarla es solo del admin.
 def test_configuracion_por_defecto_y_permisos(admin, ana):
     cfg = client.get("/configuracion", headers=ana).json()  # cualquier usuario puede leerla
     assert cfg["motores"]["nmap"]["activo"] is True
@@ -174,6 +188,7 @@ def test_configuracion_por_defecto_y_permisos(admin, ana):
     assert client.put("/configuracion", json=cfg, headers=ana).status_code == 403
 
 
+# Lo que guardo en la configuración se mantiene.
 def test_guardar_configuracion_persiste(admin):
     cfg = client.get("/configuracion", headers=admin).json()
     cfg["motores"]["nmap"].update({"puertos": "rapido", "timeout_s": 120, "detectar_versiones": False})
@@ -187,6 +202,7 @@ def test_guardar_configuracion_persiste(admin):
     assert de_nuevo["retencion_dias"] == 90
 
 
+# Se rechazan valores peligrosos, como activar Nikto o ZAP sin que el servidor lo tenga.
 def test_configuracion_rechaza_valores_peligrosos(admin):
     cfg = client.get("/configuracion", headers=admin).json()
     malo = {**cfg, "motores": {**cfg["motores"], "zap": {"activo": True}}}
@@ -197,6 +213,7 @@ def test_configuracion_rechaza_valores_peligrosos(admin):
     assert client.put("/configuracion", json=malo, headers=admin).status_code == 422
 
 
+# Las IPs públicas solo se pueden habilitar si el servidor lo permite.
 def test_publicas_solo_si_el_servidor_lo_permite(admin, monkeypatch):
     cfg = client.get("/configuracion", headers=admin).json()
     cfg["alcance"]["permitir_publicas"] = True
@@ -206,6 +223,7 @@ def test_publicas_solo_si_el_servidor_lo_permite(admin, monkeypatch):
     assert client.put("/configuracion", json=cfg, headers=admin).status_code == 200
 
 
+# El candado del servidor manda sobre lo que diga la configuración.
 def test_candado_del_servidor_manda_sobre_la_configuracion(admin, monkeypatch):
     """Aunque la BD diga 'permitir públicas', si el servidor lo bloquea no se escanea."""
     monkeypatch.setenv("ALLOW_PUBLIC_SCANS", "true")
@@ -221,6 +239,7 @@ def test_candado_del_servidor_manda_sobre_la_configuracion(admin, monkeypatch):
         scanner.resolver_y_validar("ejemplo.com", permitir_publicos=True)
 
 
+# Con Nmap desactivado la evaluación falla con un mensaje claro.
 def test_nmap_desactivado_hace_fallar_la_evaluacion(admin, monkeypatch):
     cfg = client.get("/configuracion", headers=admin).json()
     cfg["motores"]["nmap"]["activo"] = False
@@ -231,6 +250,7 @@ def test_nmap_desactivado_hace_fallar_la_evaluacion(admin, monkeypatch):
     assert final["estado"] == "fallida" and "desactivado" in final["detalle_error"]
 
 
+# Lo que se configura (puertos, timeout) realmente llega al escáner.
 def test_la_configuracion_llega_al_escaner(admin, monkeypatch):
     cfg = client.get("/configuracion", headers=admin).json()
     cfg["motores"]["nmap"].update({"puertos": "completo", "timeout_s": 77, "detectar_versiones": False})
@@ -244,6 +264,7 @@ def test_la_configuracion_llega_al_escaner(admin, monkeypatch):
     assert recibido == {"perfil": "completo", "timeout": 77, "versiones": False}
 
 
+# Los perfiles rápido, completo y predeterminado generan los argumentos esperados.
 def test_argumentos_de_nmap_segun_perfil():
     assert scanner.argumentos_de_puertos("rapido", None) == ["--top-ports", "100"]
     assert scanner.argumentos_de_puertos("completo", None) == ["-p", "1-65535"]
@@ -254,6 +275,7 @@ def test_argumentos_de_nmap_segun_perfil():
 
 
 # ---------------- Progreso y concurrencia de evaluaciones ----------------
+# La evaluación guarda su progreso y su etapa.
 def test_evaluacion_guarda_progreso_y_etapa(admin, monkeypatch):
     monkeypatch.setattr(scanner, "resolver_y_validar", lambda host, permitir_publicos=None: "127.0.0.1")
     monkeypatch.setattr(scanner, "escanear_puertos", lambda ip, **kw: [
@@ -266,6 +288,7 @@ def test_evaluacion_guarda_progreso_y_etapa(admin, monkeypatch):
     assert len(final["hallazgos"]) == 1
 
 
+# No se pueden lanzar dos evaluaciones a la vez sobre el mismo activo (409).
 def test_no_se_lanzan_dos_evaluaciones_a_la_vez(admin):
     _, a = crear_activo(admin)
     db = SessionLocal()
@@ -276,6 +299,7 @@ def test_no_se_lanzan_dos_evaluaciones_a_la_vez(admin):
     assert r.status_code == 409
 
 
+# Una evaluación muy antigua que quedó colgada no bloquea el activo para siempre.
 def test_una_evaluacion_colgada_no_bloquea_para_siempre(admin):
     _, a = crear_activo(admin)
     db = SessionLocal()
@@ -285,6 +309,7 @@ def test_una_evaluacion_colgada_no_bloquea_para_siempre(admin):
     assert client.post(f"/activos/{a['id']}/evaluaciones", headers=admin).status_code == 201
 
 
+# Al reiniciar el servidor, las evaluaciones que quedaron a medias se marcan como fallidas.
 def test_al_reiniciar_las_evaluaciones_huerfanas_se_marcan_fallidas(admin):
     _, a = crear_activo(admin)
     db = SessionLocal()
@@ -299,6 +324,7 @@ def test_al_reiniciar_las_evaluaciones_huerfanas_se_marcan_fallidas(admin):
 
 
 # ---------------- Retención de datos ----------------
+# La retención borra lo antiguo pero conserva la evaluación vigente de cada activo.
 def test_retencion_borra_lo_antiguo_pero_conserva_el_estado_vigente(admin):
     _, a = crear_activo(admin)
     vieja = evaluacion_completada(a["id"], hace_dias=400)
@@ -313,6 +339,7 @@ def test_retencion_borra_lo_antiguo_pero_conserva_el_estado_vigente(admin):
     assert client.get(f"/evaluaciones/{unica_vieja}", headers=admin).status_code == 200
 
 
+# Con 0 días no se borra nada.
 def test_retencion_cero_es_sin_limite(admin):
     cfg = client.get("/configuracion", headers=admin).json()
     cfg["retencion_dias"] = 0
@@ -326,6 +353,7 @@ def test_retencion_cero_es_sin_limite(admin):
 
 
 # ---------------- Reportes ----------------
+# Se genera un reporte PDF y se puede descargar (compruebo que empiece con %PDF).
 def test_generar_y_descargar_reporte_pdf(admin):
     p, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"], hallazgos=(("Telnet expuesto", "alta", 7.5), ("Servicio SSH expuesto", "baja", 3.7)))
@@ -343,6 +371,7 @@ def test_generar_y_descargar_reporte_pdf(admin):
     assert [x["id"] for x in client.get("/reportes", headers=admin).json()] == [rep["id"]]
 
 
+# Si no se escribe título, se usa uno por defecto.
 def test_reporte_titulo_por_defecto(admin):
     p, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -350,6 +379,7 @@ def test_reporte_titulo_por_defecto(admin):
     assert rep["titulo"].startswith("Informe de seguridad — Lab")
 
 
+# El reporte valida que las evaluaciones existan, sean del proyecto y estén completadas.
 def test_reporte_valida_las_evaluaciones(admin):
     p, a = crear_activo(admin)
     _, otro = crear_activo(admin, nombre="Otro")
@@ -367,6 +397,7 @@ def test_reporte_valida_las_evaluaciones(admin):
     assert client.post(url, json={"evaluacion_ids": [fallida]}, headers=admin).status_code == 400
 
 
+# Un usuario no puede ver ni descargar los reportes de otro.
 def test_reportes_respetan_la_propiedad(admin, ana):
     p, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -378,6 +409,7 @@ def test_reportes_respetan_la_propiedad(admin, ana):
     assert client.get("/reportes").status_code == 401
 
 
+# Al eliminar el reporte también se borra el archivo.
 def test_eliminar_reporte_borra_el_archivo(admin, tmp_path):
     p, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"])
@@ -389,6 +421,7 @@ def test_eliminar_reporte_borra_el_archivo(admin, tmp_path):
     assert client.get(f"/reportes/{rep['id']}/descargar", headers=admin).status_code == 404
 
 
+# El PDF se genera bien aunque no haya hallazgos.
 def test_pdf_con_proyecto_sin_hallazgos(admin):
     p, a = crear_activo(admin)
     eid = evaluacion_completada(a["id"], hallazgos=())
@@ -397,6 +430,7 @@ def test_pdf_con_proyecto_sin_hallazgos(admin):
 
 
 # ---------------- Migración de columnas ----------------
+# migrar.py agrega las columnas que faltan en una base antigua sin perder datos.
 def test_migracion_agrega_columnas_a_una_base_antigua(tmp_path):
     ruta = tmp_path / "vieja.db"
     eng = create_engine(f"sqlite:///{ruta}")
@@ -414,6 +448,7 @@ def test_migracion_agrega_columnas_a_una_base_antigua(tmp_path):
 
 
 # ---------------- Listados globales (una sola consulta para el panel) ----------------
+# Los listados globales (activos, evaluaciones) solo muestran lo del usuario.
 def test_listados_globales_respetan_la_propiedad(admin, ana):
     _, a_admin = crear_activo(admin, nombre="Del admin")
     _, a_ana = crear_activo(ana, nombre="De Ana")
@@ -428,11 +463,13 @@ def test_listados_globales_respetan_la_propiedad(admin, ana):
     assert client.get("/evaluaciones").status_code == 401
 
 
+# Si no hay datos, los listados devuelven vacío sin errores.
 def test_listados_globales_vacios(admin):
     assert client.get("/activos", headers=admin).json() == []
     assert client.get("/evaluaciones", headers=admin).json() == []
 
 
+# El parámetro `ultimas` limita a las N evaluaciones más recientes por activo.
 def test_evaluaciones_con_limite_por_activo(admin):
     _, a = crear_activo(admin, nombre="Uno")
     _, b = crear_activo(admin, nombre="Dos")
@@ -449,6 +486,7 @@ def test_evaluaciones_con_limite_por_activo(admin):
     assert client.get(f"/evaluaciones/{ids_a[0]}", headers=admin).status_code == 200
 
 
+# La paginación entrega páginas y el total en la cabecera X-Total-Count.
 def test_evaluaciones_paginadas(admin):
     _, a = crear_activo(admin, nombre="Uno")
     ids = [evaluacion_completada(a["id"], hace_dias=d) for d in (50, 40, 30, 20, 10)]  # la más reciente es la última
@@ -469,6 +507,7 @@ def test_evaluaciones_paginadas(admin):
     assert client.get("/evaluaciones?pagina=1&por_pagina=201", headers=admin).status_code == 422
 
 
+# La paginación también respeta la propiedad.
 def test_evaluaciones_paginadas_respetan_propiedad(admin, ana):
     _, a = crear_activo(admin, nombre="Del admin")
     evaluacion_completada(a["id"])
@@ -478,6 +517,7 @@ def test_evaluaciones_paginadas_respetan_propiedad(admin, ana):
 
 
 # ---------------- Cancelar y eliminar evaluaciones ----------------
+# Deja una evaluación "en curso" para probar la cancelación.
 def evaluacion_en_curso(activo_id, estado=EstadoEvaluacion.EN_PROGRESO):
     db = SessionLocal()
     ev = Evaluacion(activo_id=activo_id, estado=estado, progreso=30, etapa="Escaneando puertos y servicios")
@@ -488,6 +528,7 @@ def evaluacion_en_curso(activo_id, estado=EstadoEvaluacion.EN_PROGRESO):
     return eid
 
 
+# Se puede cancelar una evaluación en curso.
 def test_cancelar_evaluacion_en_curso(admin):
     _, a = crear_activo(admin, nombre="Cancelable")
     eid = evaluacion_en_curso(a["id"])
@@ -499,12 +540,14 @@ def test_cancelar_evaluacion_en_curso(admin):
     assert client.post(f"/evaluaciones/{eid}/cancelar", headers=admin).status_code == 409  # ya terminó
 
 
+# Cancelar una ya terminada da 409.
 def test_cancelar_evaluacion_completada_es_409(admin):
     _, a = crear_activo(admin, nombre="Terminada")
     eid = evaluacion_completada(a["id"])
     assert client.post(f"/evaluaciones/{eid}/cancelar", headers=admin).status_code == 409
 
 
+# Al eliminar una evaluación se borran sus hallazgos (cascada).
 def test_eliminar_evaluacion_borra_sus_hallazgos(admin):
     _, a = crear_activo(admin, nombre="Borrable")
     eid = evaluacion_completada(a["id"])
@@ -515,6 +558,7 @@ def test_eliminar_evaluacion_borra_sus_hallazgos(admin):
     db.close()
 
 
+# No se puede eliminar una evaluación en curso.
 def test_no_se_elimina_una_evaluacion_en_curso(admin):
     _, a = crear_activo(admin, nombre="EnCurso")
     eid = evaluacion_en_curso(a["id"], EstadoEvaluacion.PENDIENTE)
@@ -524,6 +568,7 @@ def test_no_se_elimina_una_evaluacion_en_curso(admin):
     assert client.delete(f"/evaluaciones/{eid}", headers=admin).status_code == 204
 
 
+# Cancelar y eliminar también respetan la propiedad.
 def test_cancelar_y_eliminar_respetan_la_propiedad(admin, ana):
     _, a = crear_activo(admin, nombre="Ajeno")
     en_curso = evaluacion_en_curso(a["id"])
@@ -533,6 +578,7 @@ def test_cancelar_y_eliminar_respetan_la_propiedad(admin, ana):
     assert client.post("/evaluaciones/no-existe/cancelar", headers=admin).status_code == 404
 
 
+# La tarea de fondo se detiene si la evaluación fue cancelada.
 def test_la_tarea_de_fondo_se_detiene_si_la_evaluacion_fue_cancelada(admin, monkeypatch):
     """La evaluación se cancela mientras Nmap corre: no se guardan resultados ni se vuelve a 'completada'."""
     from app import scan_service
@@ -553,6 +599,7 @@ def test_la_tarea_de_fondo_se_detiene_si_la_evaluacion_fue_cancelada(admin, monk
     assert j["estado"] == "fallida" and j["etapa"] == "Cancelada" and j["hallazgos"] == []
 
 
+# Una evaluación cancelada mientras estaba en cola nunca arranca.
 def test_una_evaluacion_cancelada_en_cola_no_arranca(admin, monkeypatch):
     from app import scan_service
 

@@ -29,11 +29,13 @@ from app.models import Activo, Evaluacion, Hallazgo, Proyecto, Usuario  # noqa: 
 from app.security import hashear_contrasena  # noqa: E402
 from app.tiempo import ahora_utc  # noqa: E402
 
+# Tres tamaños de datos para ver cómo se comporta la API cuando crece. La "grande" son 20 proyectos x 15 activos x 20 evaluaciones = 6.000 evaluaciones.
 ESCALAS = [  # (nombre, proyectos, activos por proyecto, evaluaciones por activo)
     ("pequeña", 3, 3, 4),
     ("mediana", 10, 10, 10),
     ("grande", 20, 15, 20),
 ]
+# Cada endpoint se mide 15 veces y saco la mediana y el p95 (el valor bajo el cual queda el 95% de las mediciones).
 REPETICIONES = 15
 SEV = ["critica", "alta", "media", "baja", "informativa"]
 PESOS = [1, 3, 6, 5, 8]
@@ -41,6 +43,7 @@ OWASP = ["A02:2021 - Cryptographic Failures", "A05:2021 - Security Misconfigurat
 client = TestClient(app)
 
 
+# Llena la base con datos aleatorios (con semilla fija para que sea repetible).
 def sembrar(cantidad_de_proyectos, activos_por_proyecto, evaluaciones_por_activo):
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -77,6 +80,7 @@ def sembrar(cantidad_de_proyectos, activos_por_proyecto, evaluaciones_por_activo
     return dict(proyectos=len(proyectos_creados), activos=len(activos_creados), evaluaciones=len(evaluaciones_creadas), hallazgos=len(hallazgos_creados)), evaluaciones_creadas[0]["id"], proyectos_creados[0]["id"]
 
 
+# Mide cuánto tarda un endpoint y cuánto pesa su respuesta.
 def medir(cabecera, metodo, ruta, **opciones):
     tiempos, tamano_respuesta = [], 0
     for _ in range(REPETICIONES):
@@ -89,6 +93,7 @@ def medir(cabecera, metodo, ruta, **opciones):
     return statistics.median(tiempos), tiempos[int(len(tiempos) * 0.95) - 1], tiempos[-1], tamano_respuesta
 
 
+# Recorre las escalas, mide los endpoints y escribe el resumen en un archivo .md. Esto fue lo que me permitió comparar "traer todo" contra "paginar".
 def main():
     motor = engine.dialect.name
     lineas = ["# Resultados de rendimiento\n", f"Motor de base de datos: **{motor}** · {REPETICIONES} repeticiones por medición · tiempos en milisegundos (incluye la pila completa de la API, sin red).\n"]

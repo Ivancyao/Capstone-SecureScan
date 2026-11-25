@@ -84,6 +84,7 @@
   --gap: 20px;
 }
 
+/* Tema oscuro: mismas variables con otros valores. Como todo el CSS usa estas variables, cambiar de tema no requiere tocar nada más. */
 :root[data-theme="dark"],
 .scope-dark {
   --bg: #06080e;
@@ -110,6 +111,7 @@
   --accent-line: #34428f;
   --accent-glow: rgba(123, 146, 255, 0.32);
 
+  /* Los colores de severidad son más claros en el tema oscuro para mantener el contraste. */
   --sev-critica: #ff4d5e;
   --sev-alta: #ff8a3d;
   --sev-media: #ffd23f;

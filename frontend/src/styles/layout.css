@@ -1,5 +1,8 @@
+/* Estructura general: menú lateral, barra superior, encabezado de página y cuadrículas. */
+
 /* ---------- Estructura de la aplicación ---------- */
 .shell { display: grid; grid-template-columns: var(--nav-w) minmax(0, 1fr); min-height: 100vh; }
+/* Enlace "Saltar al contenido": solo aparece al enfocarlo con teclado, sirve para no recorrer todo el menú. */
 .skip { position: absolute; left: -999px; top: 8px; z-index: 100; background: var(--surface); padding: 8px 12px; border-radius: 6px; }
 .skip:focus { left: 8px; }
 
@@ -89,6 +92,7 @@
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .spacer { flex: 1; }
 
+/* Desde acá hacia abajo es la adaptación a pantallas más chicas (tablet y celular). */
 @media (max-width: 1100px) {
   .grid-main, .grid-main-r { grid-template-columns: minmax(0, 1fr); }
   .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

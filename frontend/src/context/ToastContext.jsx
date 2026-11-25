@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon.jsx";
 
+// Avisos emergentes (toast) para confirmar acciones o mostrar errores. Máximo 4 a la vez; desaparecen solos (los errores tardan más).
 const ToastCtx = createContext(null);
 export const useToast = () => useContext(ToastCtx);
 

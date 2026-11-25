@@ -1,6 +1,7 @@
 // Gráficos hechos a mano en SVG/HTML, sin librerías.
 // Barras de hasta 24 px con extremo redondeado, 2 px entre segmentos, texto en color neutro,
 // tooltip al pasar el cursor y vista de tabla.
+// Los gráficos los hice a mano con SVG y HTML, sin librerías externas, para no sumar dependencias y controlar la accesibilidad.
 import { useState } from "react";
 import { Icon } from "./Icon.jsx";
 import { SevMark } from "./ui.jsx";
@@ -8,6 +9,7 @@ import { SEV, SEVERIDADES } from "../lib/risk.js";
 import { fmtFechaCorta } from "../lib/format.js";
 
 // ---------- Tooltip ----------
+// Tooltip (globo con información) que sigue al cursor o aparece al enfocar con el teclado.
 export function useTip() {
   const [tip, setTip] = useState(null);
   const mover = (contenido) => (evento) => setTip({ x: evento.clientX, y: evento.clientY, contenido });
@@ -28,6 +30,7 @@ export function TipLayer({ tip }) {
 }
 
 // ---------- Marco con vista de tabla ----------
+// Marco común de cada gráfico. Tiene un botón "Ver tabla" para ver los mismos datos en una tabla (accesible para lectores de pantalla).
 export function ChartFrame({ titulo, descripcion, tabla, children, leyenda }) {
   const [verTabla, setVerTabla] = useState(false);
   return (
@@ -92,6 +95,7 @@ export function LeyendaSev({ conteo }) {
 }
 
 // ---------- Barra apilada de severidad ----------
+// Barra apilada con la proporción de hallazgos por severidad.
 export function SeverityBar({ conteo, alto = 14 }) {
   const total = SEVERIDADES.reduce((acumulado, severidad) => acumulado + conteo[severidad], 0);
   if (!total) return <div className="sevbar vacia" style={{ height: alto }} aria-label="Sin hallazgos" />;
@@ -105,6 +109,7 @@ export function SeverityBar({ conteo, alto = 14 }) {
 }
 
 // ---------- Columnas apiladas por semana ----------
+// Columnas de las últimas 8 semanas, apiladas por severidad (es el gráfico de tendencia del panel).
 export function WeeklyColumns({ semanas, alto = 190 }) {
   const { tip, mover, enfocar, ocultar } = useTip();
   const max = Math.max(4, ...semanas.map((semana) => semana.total));
@@ -192,6 +197,7 @@ export function WeeklyColumns({ semanas, alto = 190 }) {
 }
 
 // ---------- Barras horizontales (una serie) ----------
+// Barras horizontales; las uso para el ranking OWASP.
 export function HBars({ filas, color = "var(--accent)", vacio = "Sin datos" }) {
   const { tip, mover, enfocar, ocultar } = useTip();
   if (!filas.length) return <p className="small muted">{vacio}</p>;
@@ -223,6 +229,7 @@ export function HBars({ filas, color = "var(--accent)", vacio = "Sin datos" }) {
 }
 
 // ---------- Mini línea de evolución ----------
+// Mini gráfico de línea para ver la tendencia de un activo.
 export function Sparkline({ valores, ancho = 84, alto = 26 }) {
   if (!valores || valores.length < 2) return <span className="muted xs">1 evaluación</span>;
   const max = Math.max(...valores, 1);
@@ -241,6 +248,7 @@ export function Sparkline({ valores, ancho = 84, alto = 26 }) {
 }
 
 // ---------- Medidor CVSS con las bandas oficiales ----------
+// Medidor visual del puntaje CVSS de un hallazgo.
 export function CvssMeter({ valor }) {
   const valorAcotado = Math.max(0, Math.min(10, valor ?? 0));
   const bandas = [

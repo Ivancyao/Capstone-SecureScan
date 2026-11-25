@@ -19,10 +19,12 @@ from app.database import Base
 from app.tiempo import ahora_utc
 
 
+# Uso UUID como id (en vez de 1, 2, 3...) para que nadie pueda adivinar ids de otros usuarios cambiando un número en la URL.
 def gen_uuid():
     return str(uuid.uuid4())
 
 
+# Los tres roles de la plataforma. Ojo: hoy el backend trata a "analista" igual que "usuario"; solo ADMIN tiene permisos extra.
 class RolUsuario(str, enum.Enum):
     """RBAC: qué puede hacer cada usuario dentro de la plataforma."""
     ADMIN = "admin"
@@ -46,6 +48,7 @@ class SeveridadHallazgo(str, enum.Enum):
     INFORMATIVA = "informativa"
 
 
+# Tabla de usuarios. Nunca guardo la contraseña, solo su hash (password_hash).
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -60,6 +63,7 @@ class Usuario(Base):
     proyectos = relationship("Proyecto", back_populates="propietario")
 
 
+# Un proyecto pertenece a un usuario (propietario). Es lo que usa el sistema para decidir quién ve qué.
 class Proyecto(Base):
     """Agrupa los activos (aplicaciones) de una organización/contexto."""
     __tablename__ = "proyectos"
@@ -75,6 +79,7 @@ class Proyecto(Base):
     reportes = relationship("Reporte", back_populates="proyecto", cascade="all, delete-orphan")
 
 
+# Los activos cuelgan de un proyecto. Si borro el proyecto, se borran sus activos, evaluaciones y hallazgos (cascade).
 class Activo(Base):
     """Una aplicación/sistema registrado para ser evaluado."""
     __tablename__ = "activos"
@@ -90,6 +95,7 @@ class Activo(Base):
     evaluaciones = relationship("Evaluacion", back_populates="activo", cascade="all, delete-orphan")
 
 
+# Cada vez que se escanea un activo se crea una evaluación. Guarda el estado y el avance para mostrarlo en vivo en la pantalla.
 class Evaluacion(Base):
     """Una ejecución de escaneo de seguridad sobre un activo."""
     __tablename__ = "evaluaciones"
@@ -107,6 +113,7 @@ class Evaluacion(Base):
     hallazgos = relationship("Hallazgo", back_populates="evaluacion", cascade="all, delete-orphan")
 
 
+# Un hallazgo es un problema concreto encontrado (puerto abierto, cabecera faltante, etc.), con su severidad y recomendación.
 class Hallazgo(Base):
     """Una vulnerabilidad concreta detectada en una evaluación."""
     __tablename__ = "hallazgos"
@@ -126,6 +133,7 @@ class Hallazgo(Base):
     evaluacion = relationship("Evaluacion", back_populates="hallazgos")
 
 
+# En la BD solo guardo los datos del reporte (nombre, fecha, evaluaciones incluidas). El PDF en sí queda como archivo en disco (carpeta REPORTS_DIR).
 class Reporte(Base):
     """Reporte PDF generado a partir de una o más evaluaciones de un proyecto."""
     __tablename__ = "reportes"
@@ -142,6 +150,7 @@ class Reporte(Base):
     proyecto = relationship("Proyecto", back_populates="reportes")
 
 
+# Guarda los ajustes como pares clave-valor en JSON, para poder agregar opciones sin cambiar la tabla.
 class Configuracion(Base):
     """Ajustes de la plataforma (clave -> JSON). Hoy hay una sola clave: "escaneo"."""
     __tablename__ = "configuracion"
@@ -151,6 +160,7 @@ class Configuracion(Base):
     actualizado_en = Column(DateTime, default=ahora_utc)
 
 
+# Es el módulo de análisis rápido: revisa una URL o un archivo con VirusTotal. Del archivo no guardo el contenido, solo su huella SHA-256.
 class Analisis(Base):
     """
     Análisis rápido de una URL o de un archivo: reputación en VirusTotal + señales locales.

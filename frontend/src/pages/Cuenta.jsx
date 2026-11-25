@@ -8,6 +8,7 @@ import { useToast } from "../context/ToastContext.jsx";
 import { api } from "../services/index.js";
 import { OWASP, SEV, SEVERIDADES } from "../lib/risk.js";
 
+// Perfil del usuario: cambiar el nombre y la contraseña (esta última pide la contraseña actual).
 export function Perfil() {
   useTitulo("Mi perfil");
   const { user, setUser, salir } = useAuth();
@@ -96,8 +97,14 @@ export function Perfil() {
 }
 
 // ---------- Ayuda ----------
-const IMPLEMENTADAS = { A02: "Hoy lo detecta Nmap (FTP, Telnet sin cifrar).", A05: "Hoy lo detecta Nmap (servicios y puertos expuestos)." };
+// Lista de qué categorías OWASP detecta hoy la plataforma, para ser transparente con lo que sí cubre y lo que no.
+const IMPLEMENTADAS = {
+  A01: "Con ZAP activado, por ejemplo formularios sin token anti-CSRF.",
+  A02: "Hoy lo detecta Nmap (FTP, Telnet sin cifrar).",
+  A05: "Nmap (servicios y puertos expuestos) y, con ZAP, cabeceras y cookies mal configuradas.",
+};
 
+// Glosario y preguntas frecuentes: los escribí para que alguien sin conocimientos de seguridad entienda los términos.
 const GLOSARIO = [
   ["Activo", "La aplicación o el servidor que se registra para evaluarlo."],
   ["Evaluación", "Una ejecución del escáner sobre un activo, con su fecha, estado y resultados."],
@@ -116,6 +123,7 @@ const FAQ = [
   ["¿Cómo confirmo que corregí algo?", "Marca el hallazgo como corregido y vuelve a evaluar el activo. Si ya no aparece, quedó resuelto."],
 ];
 
+// Pantalla de ayuda. Si la URL trae un ancla (#), baja directo a esa sección.
 export function Ayuda() {
   useTitulo("Ayuda y glosario");
   const { hash } = useLocation();

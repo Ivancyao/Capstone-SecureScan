@@ -25,6 +25,7 @@ client = TestClient(app)
 KEY = "clave-zap"
 
 
+# Arma una alerta falsa con el formato que entrega ZAP.
 def alerta(nombre="Content Security Policy (CSP) Header Not Set", plugin="10038", riesgo=2, url="http://10.0.0.5:3000/", **extra):
     base = {
         "pluginId": plugin, "alert": nombre, "name": nombre, "riskcode": str(riesgo), "risk": "Medium",
@@ -37,6 +38,7 @@ def alerta(nombre="Content Security Policy (CSP) Header Not Set", plugin="10038"
     return base
 
 
+# Simula la API de ZAP (spider, escaneo pasivo, escaneo activo y alertas) para probar mi lógica sin ZAP real.
 def zap_falso(alertas, estados_spider=(50, 100), pendientes=(3, 0), llamadas=None, clave=KEY):
     """Simulacro del API de ZAP. `llamadas` acumula las rutas pedidas."""
     cont = {"spider": 0, "pscan": 0}
@@ -69,11 +71,13 @@ def zap_falso(alertas, estados_spider=(50, 100), pendientes=(3, 0), llamadas=Non
     return httpx.MockTransport(manejar)
 
 
+# Crea un ZapClient conectado al ZAP falso, sin esperas reales.
 def cliente(alertas=(), **kw):
     return ZapClient("http://zap:8080", KEY, transport=zap_falso(list(alertas), **kw), dormir=lambda s: None)
 
 
 # ---------------- Cliente ----------------
+# Se envía la clave de API y se lee la versión.
 def test_version_y_clave_de_api():
     assert cliente().version() == "2.15.0"
     malo = ZapClient("http://zap:8080", "otra", transport=zap_falso([]), dormir=lambda s: None)
@@ -81,6 +85,7 @@ def test_version_y_clave_de_api():
         malo.version()
 
 
+# Sin ZAP_URL no se puede crear el cliente.
 def test_sin_zap_url_no_se_puede_crear(monkeypatch):
     monkeypatch.delenv("ZAP_URL", raising=False)
     assert zap_client.disponible() is False
@@ -88,6 +93,7 @@ def test_sin_zap_url_no_se_puede_crear(monkeypatch):
         ZapClient()
 
 
+# Si ZAP está apagado o no responde, se da un error claro.
 def test_zap_apagado_o_inalcanzable():
     def caido(req):
         raise httpx.ConnectError("sin conexión")
@@ -96,6 +102,7 @@ def test_zap_apagado_o_inalcanzable():
         c.version()
 
 
+# El flujo espera al spider y luego al análisis pasivo.
 def test_flujo_espera_spider_y_analisis_pasivo():
     llamadas = []
     c = cliente([alerta()], estados_spider=(0, 40, 100), pendientes=(5, 2, 0), llamadas=llamadas)
@@ -106,23 +113,27 @@ def test_flujo_espera_spider_y_analisis_pasivo():
     assert "/JSON/ascan/action/scan/" not in llamadas           # el escaneo activo NO se lanza por defecto
 
 
+# El escaneo activo solo corre si se pide.
 def test_escaneo_activo_solo_si_se_pide():
     llamadas = []
     cliente([], llamadas=llamadas).analizar("http://10.0.0.5/", activo=True)
     assert "/JSON/ascan/action/scan/" in llamadas
 
 
+# Si el spider no termina, se corta por tiempo máximo.
 def test_tiempo_maximo_si_el_spider_no_termina():
     c = ZapClient("http://zap:8080", KEY, transport=zap_falso([], estados_spider=(10,)), dormir=lambda s: __import__("time").sleep(0.01))
     with pytest.raises(ZapError, match="tiempo máximo"):
         c.analizar("http://10.0.0.5/", limite_s=0.05)
 
 
+# Las alertas se leen por páginas.
 def test_alertas_se_leen_por_paginas():
     muchas = [alerta(nombre=f"Alerta {i}", plugin=str(i)) for i in range(1203)]
     assert len(cliente(muchas).alertas("http://10.0.0.5/")) == 1203
 
 
+# Se manejan respuestas con error de ZAP.
 def test_respuesta_de_zap_con_error():
     def roto(req):
         return httpx.Response(500, json={"message": "boom"})
@@ -132,6 +143,7 @@ def test_respuesta_de_zap_con_error():
 
 
 # ---------------- Traducción de alertas ----------------
+# Las alertas se agrupan por tipo y se cuentan las instancias.
 def test_agrupa_por_tipo_y_cuenta_instancias():
     alertas = [alerta(url=f"http://10.0.0.5:3000/p{i}") for i in range(7)] + [alerta("Cookie sin HttpOnly", "10010", 1, param="sid")]
     hs = agrupar_alertas(alertas)
@@ -141,16 +153,19 @@ def test_agrupa_por_tipo_y_cuenta_instancias():
     assert csp["evidencia"].count("http://") == 3  # solo 3 ejemplos
 
 
+# Severidad, CVSS estimado y orden de los hallazgos.
 def test_severidad_cvss_y_orden():
     hs = agrupar_alertas([alerta("Info", "1", 0), alerta("Baja", "2", 1), alerta("Media", "3", 2), alerta("Alta", "4", 3)])
     assert [(h["severidad"].value, h["cvss_score"]) for h in hs] == [("alta", 7.5), ("media", 5.3), ("baja", 3.1), ("informativa", 0.0)]
     assert all(h["herramienta_origen"] == "owasp_zap" for h in hs)
 
 
+# ZAP nunca genera severidad crítica.
 def test_zap_nunca_produce_critica():
     assert all(h["severidad"].value != "critica" for h in agrupar_alertas([alerta(riesgo=r) for r in (0, 1, 2, 3, 4)]))
 
 
+# La categoría OWASP se saca de las etiquetas de la alerta.
 def test_categoria_owasp_desde_etiquetas():
     assert agrupar_alertas([alerta()])[0]["categoria_owasp"] == "A05:2021 - Security Misconfiguration"
     sqli = alerta("SQL Injection", "40018", 3, tags={"OWASP_2021_A03": "x"})
@@ -159,6 +174,7 @@ def test_categoria_owasp_desde_etiquetas():
     assert agrupar_alertas([alerta(tags={"OWASP_2021_A99": "x"})])[0]["categoria_owasp"] is None
 
 
+# El HTML de las descripciones se limpia y los textos se acortan.
 def test_html_se_limpia_y_los_textos_se_acotan():
     # una alerta fuera del catálogo en español conserva el texto de ZAP (limpiado de HTML)
     h = agrupar_alertas([alerta("Alerta fuera del catalogo", "99999", 1, solution="<p>Haz <b>esto</b></p><p>y aquello</p>", description="x" * 5000)])[0]
@@ -166,12 +182,14 @@ def test_html_se_limpia_y_los_textos_se_acotan():
     assert len(h["evidencia"]) <= 1500
 
 
+# Contenido hostil (por ejemplo etiquetas raras dentro de una alerta) no rompe nada.
 def test_contenido_hostil_no_rompe_nada():
     h = agrupar_alertas([alerta(nombre="<script>alert(1)</script>", evidence="'; DROP TABLE hallazgos;--")])[0]
     assert "DROP TABLE" in h["evidencia"]  # se guarda como texto; los parámetros SQL van enlazados, no concatenados
 
 
 # ---------------- Dirección que se le entrega a ZAP ----------------
+# La URL que se le pasa a ZAP sale de la IP ya validada.
 @pytest.mark.parametrize("url,ip,puertos,esperado", [
     ("http://juiceshop:3000", "172.18.0.5", [], "http://172.18.0.5:3000/"),
     ("https://app.lab.local/login", "10.0.0.7", [], "https://10.0.0.7/login"),
@@ -187,6 +205,7 @@ def test_url_para_zap(url, ip, puertos, esperado):
 
 
 # ---------------- Integración con la evaluación ----------------
+# Configuración común para las pruebas de evaluación completa con ZAP simulado.
 @pytest.fixture
 def entorno(monkeypatch):
     Base.metadata.drop_all(bind=engine)
@@ -206,11 +225,13 @@ def entorno(monkeypatch):
     return h, a
 
 
+# Lanza una evaluación y devuelve su resultado.
 def evaluar(h, activo):
     ev = client.post(f"/activos/{activo['id']}/evaluaciones", headers=h).json()
     return client.get(f"/evaluaciones/{ev['id']}", headers=h).json()
 
 
+# La evaluación junta los hallazgos de Nmap y de ZAP.
 def test_evaluacion_combina_nmap_y_zap(entorno, monkeypatch):
     h, a = entorno
     usado = {}
@@ -227,6 +248,7 @@ def test_evaluacion_combina_nmap_y_zap(entorno, monkeypatch):
     assert usado == {"url": "http://10.0.0.5:3000/", "limite": 600, "activo": False}  # usa la IP validada
 
 
+# Si ZAP falla, se conservan los hallazgos de Nmap.
 def test_si_zap_falla_se_conserva_lo_de_nmap(entorno, monkeypatch):
     h, a = entorno
 
@@ -240,6 +262,7 @@ def test_si_zap_falla_se_conserva_lo_de_nmap(entorno, monkeypatch):
     assert "no pudo completar" in ev["detalle_error"] and "tiempo máximo" in ev["detalle_error"]
 
 
+# Un error inesperado de ZAP tampoco hace perder los resultados.
 def test_error_inesperado_de_zap_tampoco_pierde_resultados(entorno, monkeypatch):
     h, a = entorno
 
@@ -251,6 +274,7 @@ def test_error_inesperado_de_zap_tampoco_pierde_resultados(entorno, monkeypatch)
     assert ev["estado"] == "completada" and len(ev["hallazgos"]) == 1 and "inesperada" in ev["detalle_error"]
 
 
+# Si el objetivo no es una aplicación web, ZAP no se ejecuta.
 def test_objetivo_que_no_es_web_no_lanza_zap(entorno, monkeypatch):
     h, a = entorno
     monkeypatch.setattr(scanner, "escanear_puertos", lambda ip, **kw: [
@@ -262,6 +286,7 @@ def test_objetivo_que_no_es_web_no_lanza_zap(entorno, monkeypatch):
     assert ev["estado"] == "completada" and "no se detectó una aplicación web" in ev["detalle_error"]
 
 
+# Un objetivo público nunca llega a ZAP.
 def test_objetivo_publico_nunca_llega_a_zap(entorno, monkeypatch):
     h, a = entorno
     monkeypatch.undo()  # restaura el validador real
@@ -272,6 +297,7 @@ def test_objetivo_publico_nunca_llega_a_zap(entorno, monkeypatch):
     assert ev["estado"] == "fallida" and "Objetivo bloqueado" in ev["detalle_error"]
 
 
+# Si ZAP está desactivado en la configuración, no se usa.
 def test_zap_desactivado_en_la_configuracion_no_se_usa(entorno, monkeypatch):
     h, a = entorno
     cfg = client.get("/configuracion", headers=h).json()
@@ -282,6 +308,7 @@ def test_zap_desactivado_en_la_configuracion_no_se_usa(entorno, monkeypatch):
     assert ev["estado"] == "completada" and [x["herramienta_origen"] for x in ev["hallazgos"]] == ["nmap"]
 
 
+# ZAP solo se puede activar si el servidor lo tiene configurado.
 def test_la_configuracion_de_zap_solo_se_activa_si_el_servidor_lo_tiene(monkeypatch):
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -299,6 +326,7 @@ def test_la_configuracion_de_zap_solo_se_activa_si_el_servidor_lo_tiene(monkeypa
 
 
 # --- Regresión: el API real de ZAP entrega "risk" como texto y puede no traer "riskcode" ---
+# Cuando no hay riskcode, la severidad se lee del texto ("High", "Medium"...).
 def test_severidad_se_lee_del_texto_cuando_no_hay_riskcode():
     real = {"alert": "CSP Header Not Set", "pluginId": "10038", "risk": "Medium", "url": "http://x/"}
     assert severidad_zap(real) == "media"
@@ -308,6 +336,7 @@ def test_severidad_se_lee_del_texto_cuando_no_hay_riskcode():
     assert severidad_zap({"risk": "Critical"}) == "informativa"  # ZAP nunca produce crítica
 
 
+# Agrupar sin riskcode conserva el nivel.
 def test_agrupar_alertas_sin_riskcode_conserva_el_nivel():
     real = {"alert": "Cross-Domain Misconfiguration", "pluginId": "10098", "risk": "Medium", "url": "http://x/a",
             "param": "", "evidence": "", "description": "", "solution": "", "tags": {}}
@@ -315,11 +344,13 @@ def test_agrupar_alertas_sin_riskcode_conserva_el_nivel():
     assert h["severidad"].value == "media" and h["cvss_score"] == 5.3
 
 
+# El riskcode numérico sigue funcionando.
 def test_riskcode_numerico_sigue_funcionando():
     assert severidad_zap({"riskcode": "3", "risk": "x"}) == "alta"
 
 
 # --- Textos en español ---
+# Una alerta que está en mi catálogo se muestra en español.
 def test_alerta_conocida_se_muestra_en_espanol():
     h = agrupar_alertas([alerta()])[0]
     assert h["nombre_vulnerabilidad"] == "Falta la cabecera Content-Security-Policy (CSP)"
@@ -328,6 +359,7 @@ def test_alerta_conocida_se_muestra_en_espanol():
     assert "Content Security Policy (CSP) Header Not Set" in h["evidencia"]  # se conserva el nombre original para trazabilidad
 
 
+# Una alerta fuera del catálogo conserva el texto original y se avisa.
 def test_alerta_desconocida_conserva_el_texto_original_y_lo_avisa():
     h = agrupar_alertas([alerta("Some Brand New ZAP Rule", "55555", 2, description="<p>English text</p>", solution="<p>Fix it</p>")])[0]
     assert h["nombre_vulnerabilidad"] == "Some Brand New ZAP Rule"
@@ -335,6 +367,7 @@ def test_alerta_desconocida_conserva_el_texto_original_y_lo_avisa():
     assert h["recomendacion"] == "Fix it"
 
 
+# Reviso que el catálogo de traducciones esté bien armado.
 def test_catalogo_es_consistente():
     assert len(CATALOGO) >= 30
     for clave, (nombre, descripcion, recomendacion) in CATALOGO.items():
@@ -345,6 +378,7 @@ def test_catalogo_es_consistente():
     assert traducir({"alert": "Regla inexistente"}) is None
 
 
+# Si cancelan la evaluación, ZAP se detiene.
 def test_zap_se_detiene_al_cancelar_la_evaluacion():
     from app.cancelacion import EvaluacionCancelada
 

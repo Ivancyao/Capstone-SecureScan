@@ -9,6 +9,7 @@ import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
+# ReportLab interpreta un mini-HTML dentro de los párrafos; por eso todo texto que viene de la BD pasa por escape() antes de insertarlo (así un nombre con "<" no rompe ni inyecta nada en el PDF).
 from xml.sax.saxutils import escape  # nosec B406
 
 from reportlab.lib import colors
@@ -20,6 +21,7 @@ from reportlab.platypus import (
     KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
+# En la BD todo está en UTC; en el PDF muestro la hora de Chile (o la zona de APP_TZ). Si el sistema no tiene la base de zonas horarias, uso UTC-3 fijo.
 def _hora_local(fecha_hora: datetime) -> datetime:
     """Convierte una fecha guardada en UTC (sin zona) a la hora local (APP_TZ, por defecto America/Santiago)."""
     if fecha_hora.tzinfo is None:
@@ -31,6 +33,7 @@ def _hora_local(fecha_hora: datetime) -> datetime:
         return fecha_hora.astimezone(timezone(timedelta(hours=-3)))
 
 
+# Orden de gravedad que uso para ordenar y contar. Los colores de fondo son suaves, y además cada severidad va escrita en texto (no depende solo del color, por accesibilidad).
 ORDEN = ["critica", "alta", "media", "baja", "informativa"]
 ETIQUETA = {"critica": "Crítica", "alta": "Alta", "media": "Media", "baja": "Baja", "informativa": "Informativa"}
 FONDO = {
@@ -44,10 +47,12 @@ ACENTO = colors.HexColor("#08657f")
 LINEA = colors.HexColor("#d5dde6")
 
 
+# Todo texto del usuario o de la BD pasa por acá antes de entrar al PDF.
 def _escapar(texto) -> str:
     return escape(str(texto)) if texto is not None else ""
 
 
+# Estilos de texto del informe (título, subtítulo, celdas de tabla, etc.).
 def _estilos():
     base = getSampleStyleSheet()
     return {
@@ -62,6 +67,7 @@ def _estilos():
     }
 
 
+# Tabla genérica con encabezado de color que se repite en cada página. Las otras funciones solo le pasan filas y anchos.
 def _tabla(filas, anchos, estilo_extra=None):
     tabla = Table(filas, colWidths=anchos, repeatRows=1)
     estilo_tabla = [
@@ -77,6 +83,7 @@ def _tabla(filas, anchos, estilo_extra=None):
     return tabla
 
 
+# Pie de página con el nombre del sistema y el número de página.
 def _pie(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 8)
@@ -86,6 +93,8 @@ def _pie(canvas, doc):
     canvas.restoreState()
 
 
+# Recibe datos simples (diccionarios), no objetos de la BD, para que esta función no dependa de la base y sea fácil de probar.
+# Secciones del informe: resumen ejecutivo, activos evaluados, hallazgos priorizados, recomendaciones y limitaciones.
 def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: List[Dict]) -> bytes:
     """
     `evaluaciones`: lista de dicts {activo: {nombre, url_objetivo}, iniciada_en, hallazgos: [dict...]}.
@@ -98,6 +107,7 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
     ancho = A4[0] - 40 * mm
     elementos = []
 
+    # Junto los hallazgos de todas las evaluaciones y separo los "abiertos" (los que no están marcados como corregidos).
     todos = []
     for evaluacion in evaluaciones:
         for hallazgo in evaluacion["hallazgos"]:
@@ -111,9 +121,11 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
     elementos.append(Paragraph(f"Generado el {_hora_local(datetime.now(timezone.utc)):%d/%m/%Y %H:%M} por {_escapar(generado_por)} · {len(evaluaciones)} evaluación(es) incluida(s)", estilos["sub"]))
 
     elementos.append(Paragraph("Resumen ejecutivo", estilos["h2"]))
+    # El resumen cambia según haya o no hallazgos abiertos. Aunque no haya ninguno, aclaro que eso no garantiza que el sistema sea seguro.
     if not abiertos:
         resumen = "En las evaluaciones incluidas no hay hallazgos abiertos. Esto no garantiza la ausencia de vulnerabilidades: solo refleja lo que detectaron las herramientas usadas (ver Limitaciones)."
     else:
+        # Priorizo: cuento los críticos y altos, que son los que conviene corregir primero.
         graves = cuenta.get("critica", 0) + cuenta.get("alta", 0)
         prioridad = (
             f"Hay <b>{graves}</b> hallazgo(s) de severidad crítica o alta que conviene corregir primero."
@@ -150,6 +162,7 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
     if not todos:
         elementos.append(Paragraph("No se registraron hallazgos.", estilos["p"]))
     else:
+        # Ordeno de más grave a menos grave y, dentro de la misma severidad, por CVSS de mayor a menor.
         ordenados = sorted(todos, key=lambda hallazgo: (ORDEN.index(hallazgo["severidad"]), -(hallazgo.get("cvss_score") or 0)))
         filas = [[Paragraph(texto, estilos["cab"]) for texto in ("Severidad", "Hallazgo", "Activo", "CVSS*", "Estado")]]
         extra = []
@@ -163,10 +176,12 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
             ])
             extra.append(("BACKGROUND", (0, i), (0, i), FONDO[hallazgo["severidad"]]))
         elementos.append(_tabla(filas, [ancho * 0.14, ancho * 0.44, ancho * 0.2, ancho * 0.09, ancho * 0.13], extra))
+        # Aclaro en el propio informe que el CVSS es estimado (así no se confunde con un puntaje oficial).
         elementos.append(Paragraph("* CVSS estimado por reglas según el servicio expuesto; no es un cálculo vectorial completo.", estilos["peq"]))
 
     # ---- Recomendaciones ----
     elementos.append(Paragraph("Recomendaciones", estilos["h2"]))
+    # Las recomendaciones pueden repetirse entre hallazgos del mismo tipo; con este set muestro cada una solo una vez.
     vistas = set()
     hay = False
     for hallazgo in sorted(abiertos, key=lambda hallazgo: (ORDEN.index(hallazgo["severidad"]), -(hallazgo.get("cvss_score") or 0))):
@@ -184,13 +199,15 @@ def generar_pdf(proyecto: Dict, titulo: str, generado_por: str, evaluaciones: Li
 
     # ---- Limitaciones ----
     elementos.append(Paragraph("Limitaciones", estilos["h2"]))
+    # Sección de limitaciones: es honesto dejar claro hasta dónde llega el informe.
     for texto in (
         "Este informe refleja el estado de los sistemas en el momento de cada escaneo.",
-        "Las evaluaciones usan Nmap (puertos y servicios expuestos). El análisis de aplicaciones web con OWASP ZAP aún no está integrado, por lo que no se detectan fallos propios de la aplicación (inyecciones, XSS, etc.).",
+        "Las evaluaciones usan Nmap (puertos y servicios expuestos) y, cuando está activado, OWASP ZAP (análisis de aplicaciones web). Ninguna herramienta automática detecta todas las vulnerabilidades; el escaneo activo de ZAP está apagado por defecto.",
         "El puntaje CVSS es una estimación por reglas, útil para priorizar pero no equivalente a un puntaje CVSS v3.1 calculado con su vector completo.",
         "SecureScan solo evalúa ambientes de laboratorio o con autorización expresa del propietario.",
     ):
         elementos.append(Paragraph("• " + _escapar(texto), estilos["p"]))
 
+    # El PDF se arma en memoria (BytesIO) y devuelvo los bytes; quien llama decide dónde guardarlos.
     doc.build(elementos, onFirstPage=_pie, onLaterPages=_pie)
     return buf.getvalue()

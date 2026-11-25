@@ -22,9 +22,11 @@ from defusedxml import DefusedXmlException
 from defusedxml import ElementTree as ET  # la salida de Nmap incluye texto del objetivo: se parsea sin entidades externas
 
 # Puertos bien conocidos (1-1024) + puertos típicos de desarrollo y bases de datos.
+# Puertos que reviso por defecto: los 1-1024 más los que más aparecen en apps web y bases de datos (MySQL, Postgres, Redis, Mongo...).
 DEFAULT_PORTS = (
     "1-1024,1433,1521,3000,3306,3389,5000,5432,5900,6379,8000,8080,8443,9200,27017"
 )
+# Tiempo máximo de un escaneo, en segundos. Si se pasa, lo corto para que no quede colgado.
 NMAP_TIMEOUT = int(os.getenv("NMAP_TIMEOUT", "300"))
 
 
@@ -32,6 +34,7 @@ class ScanError(Exception):
     """Error controlado del motor de escaneo (objetivo no permitido, Nmap falló, etc.)."""
 
 
+# El activo se guarda como URL (ej. http://localhost:3000), pero Nmap necesita solo el host, por eso lo saco con urlparse.
 def extraer_host(url_objetivo: str) -> str:
     """Obtiene el host desde 'http://host:puerto/ruta' o desde 'host' a secas."""
     texto = url_objetivo.strip()
@@ -53,6 +56,8 @@ def resolver_y_validar(host: str, permitir_publicos: Optional[bool] = None) -> s
     except socket.gaierror:
         raise ScanError(f"No se pudo resolver el host '{host}'") from None
 
+    # Doble candado: el escaneo de IPs públicas solo se permite si ALLOW_PUBLIC_SCANS=true en el servidor Y además está activado en la configuración.
+    # Si el servidor dice false, ni el admin puede habilitarlo desde la web.
     candado_servidor = os.getenv("ALLOW_PUBLIC_SCANS", "false").lower() == "true"
     permitir_publicos = candado_servidor and (True if permitir_publicos is None else permitir_publicos)
     ips = []
@@ -61,6 +66,7 @@ def resolver_y_validar(host: str, permitir_publicos: Optional[bool] = None) -> s
         if ip.is_link_local:
             # 169.254.0.0/16 incluye el servicio de metadatos de la nube (169.254.169.254): nunca es un objetivo válido.
             raise ScanError(f"Objetivo bloqueado: {ip} es una dirección link-local (puede ser el servicio de metadatos de la nube).")
+        # Solo dejo pasar redes privadas y loopback (mi laboratorio). Si me preguntan: es para no escanear sistemas de terceros por error.
         es_laboratorio = ip.is_private or ip.is_loopback
         if not es_laboratorio and not permitir_publicos:
             raise ScanError(
@@ -71,6 +77,7 @@ def resolver_y_validar(host: str, permitir_publicos: Optional[bool] = None) -> s
     return str(ips[0])
 
 
+# Le pido a Nmap la salida en XML (-oX -) porque es más fácil y seguro de leer que el texto normal.
 def parsear_xml_nmap(xml_texto: str) -> List[Dict]:
     """Convierte la salida XML de Nmap en una lista de puertos abiertos."""
     try:
@@ -79,6 +86,7 @@ def parsear_xml_nmap(xml_texto: str) -> List[Dict]:
         raise ScanError("No se pudo interpretar la salida de Nmap") from None
 
     resultados = []
+    # Me quedo solo con los puertos en estado "open" y saco servicio, producto y versión cuando Nmap los detecta.
     for port in root.findall("./host/ports/port"):
         state = port.find("state")
         if state is None or state.get("state") != "open":
@@ -96,6 +104,7 @@ def parsear_xml_nmap(xml_texto: str) -> List[Dict]:
     return sorted(resultados, key=lambda puerto_abierto: puerto_abierto["puerto"])
 
 
+# Esta lista de puertos viene de la configuración; la valido con una expresión regular para que nadie pueda colar otros argumentos a Nmap.
 def argumentos_de_puertos(perfil: Optional[str], puertos: Optional[str]) -> List[str]:
     """Traduce el perfil elegido en la configuración a argumentos de Nmap."""
     if puertos:
@@ -109,6 +118,7 @@ def argumentos_de_puertos(perfil: Optional[str], puertos: Optional[str]) -> List
     return ["-p", os.getenv("NMAP_PORTS", DEFAULT_PORTS)]
 
 
+# Mato todo el grupo de procesos y no solo a Nmap, porque si queda algún hijo vivo el escaneo no termina de cerrar.
 def _matar(proceso: "subprocess.Popen") -> None:
     """Termina el proceso y todo su grupo (así no quedan procesos hijos con las tuberías abiertas)."""
     try:
@@ -130,10 +140,14 @@ def escanear_puertos(
     Si se entrega `cancelar`, se revisa cada segundo y, si devuelve True, se termina el proceso
     de Nmap y se lanza EvaluacionCancelada.
     """
+    # Última revisión antes de ejecutar: si lo que llega no es una IP, falla aquí y no se ejecuta nada.
     ipaddress.ip_address(ip)  # lanza ValueError si no es una IP válida (defensa extra)
     timeout = timeout or NMAP_TIMEOUT
+    # El comando va como lista y sin shell: así no hay inyección de comandos aunque el nombre del activo traiga caracteres raros.
+    # -sT es TCP connect (no pide permisos de administrador), -sV detecta versiones y -T4 lo hace más rápido.
     comando = ["nmap", "-sT"] + (["-sV"] if versiones else []) + ["-T4"]
     comando += argumentos_de_puertos(perfil, puertos) + ["-oX", "-", ip]
+    # Dos formas de correr Nmap: simple (con timeout) o vigilando cada segundo si el usuario canceló la evaluación.
     if cancelar is None:
         try:
             proceso = subprocess.run(  # nosec B603
@@ -153,6 +167,7 @@ def escanear_puertos(
             )
         except FileNotFoundError:
             raise ScanError("Nmap no está instalado en el servidor") from None
+        # Reviso cada 1 segundo si pidieron cancelar o si se pasó el tiempo máximo.
         inicio = time.monotonic()
         while True:
             try:

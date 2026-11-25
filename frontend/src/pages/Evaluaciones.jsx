@@ -10,8 +10,10 @@ import { fmtDuracion, fmtFechaHora, esHostPrivado, hace, hostDe, plural } from "
 import { ordenSev } from "../lib/risk.js";
 import { evaluacionAnterior } from "../lib/comparar.js";
 
+// Cantidad de evaluaciones por página en la tabla.
 const POR_PAGINA = 15;
 
+// Lista de evaluaciones con filtros por estado (todas, en curso, completadas, fallidas, canceladas) y paginación.
 export function Evaluaciones() {
   useTitulo("Evaluaciones");
   const { data, cancelarEvaluacion, eliminarEvaluacion } = useData();
@@ -19,6 +21,7 @@ export function Evaluaciones() {
   const [filtro, setFiltro] = useState("todas");
   const [pagina, setPagina] = useState(1);
   const todas = data.evaluaciones;
+  // Cuántas hay en cada estado, para los contadores de las pestañas.
   const cuenta = {
     todas: todas.length,
     curso: todas.filter((evaluacion) => evaluacion.enCurso).length,
@@ -30,6 +33,7 @@ export function Evaluaciones() {
   const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const actual = Math.min(pagina, paginas); // si el filtro deja menos páginas, se vuelve a la última
   const lista = filtradas.slice((actual - 1) * POR_PAGINA, actual * POR_PAGINA);
+  // Antes de cancelar o eliminar pido confirmación, porque son acciones que no se pueden deshacer.
   const pedirCancelar = async (evaluacion) => {
     if (window.confirm(`¿Cancelar la evaluación de “${evaluacion.activo?.nombre}”? Se detiene el escaneo y se descartan los resultados parciales.`)) {
       try { await cancelarEvaluacion(evaluacion.id); } catch { /* aviso mostrado */ }
@@ -125,6 +129,7 @@ export function Evaluaciones() {
 }
 
 // ---------- Nueva evaluación ----------
+// Formulario para elegir un activo y lanzar la evaluación. Avisa si el objetivo parece fuera del laboratorio.
 export function NuevaEvaluacion() {
   useTitulo("Nueva evaluación");
   const { data, iniciarEvaluacion } = useData();
@@ -253,6 +258,7 @@ export function NuevaEvaluacion() {
 }
 
 // ---------- Detalle ----------
+// Las 4 etapas del escaneo y el rango de progreso (%) de cada una. Coinciden con las etapas que guarda el backend en scan_service.
 const ETAPAS = [
   ["Validar el objetivo", 0, 12],
   ["Escanear puertos y servicios", 12, 80],
@@ -260,6 +266,7 @@ const ETAPAS = [
   ["Guardar los resultados", 95, 101],
 ];
 
+// Pantalla de una evaluación. Mientras está en curso muestra el progreso en vivo (la página se refresca sola cada 2 s); al terminar, el mapa de puertos y los hallazgos.
 export function EvaluacionDetalle() {
   const { id } = useParams();
   const { data, cancelarEvaluacion, eliminarEvaluacion } = useData();
@@ -271,12 +278,15 @@ export function EvaluacionDetalle() {
 
   const activo = data.activoPorId[evaluacion.activo_id];
   const completada = evaluacion.estado === "completada";
+  // Si está pendiente el progreso es 0; si ya corre, uso el porcentaje que guarda el backend.
   const progreso = evaluacion.estado === "pendiente" ? 0 : evaluacion.progreso ?? 0;
   const hallazgos = evaluacion.hallazgos.map((hallazgo) => ({ ...hallazgo, activo, proyecto: evaluacion.proyecto, fecha: evaluacion.iniciada_en }));
   const puertosAbiertos = construirPuertos(hallazgos).filter((puerto) => puerto.severidad).length;
+  // Hallazgos web = los que no son de puertos (los que vienen de ZAP). Se calculan restando los de puerto abierto.
   const hallazgosWeb = hallazgos.length - hallazgos.filter((hallazgo) => /Puerto \d+\/(tcp|udp) abierto/.test(hallazgo.evidencia || "")).length;
   const filtrados = hallazgos.filter((hallazgo) => filtro === "todos" || (filtro === "abiertos" ? hallazgo.corregido !== "si" : hallazgo.corregido === "si"));
   const corregidos = hallazgos.filter((hallazgo) => hallazgo.corregido === "si").length;
+  // El hallazgo más grave que sigue abierto (por severidad y luego CVSS). Es el que destaco como primero a corregir.
   const principal = [...hallazgos].filter((hallazgo) => hallazgo.corregido !== "si").sort((primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0))[0];
 
   return (
@@ -411,4 +421,5 @@ export function EvaluacionDetalle() {
 
 // Mientras corre el escaneo todavía no se conocen los resultados: se muestran los puertos de interés sin abrir.
 import { PUERTOS_INTERES } from "../lib/risk.js";
+// Mapa de puertos "en blanco" para mostrar mientras el escaneo aún no entrega resultados.
 const ETAPA_VACIA = PUERTOS_INTERES.map(([puerto, servicio]) => ({ puerto, servicio, severidad: null }));

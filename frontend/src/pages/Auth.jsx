@@ -8,11 +8,13 @@ import { useToast } from "../context/ToastContext.jsx";
 import { USE_MOCK } from "../services/index.js";
 import { SEV, SEVERIDADES, hallazgoDesdePuerto } from "../lib/risk.js";
 
+// Puertos de ejemplo que se muestran en el panel decorativo de la izquierda (es solo visual).
 const MUESTRA = [[22, "ssh"], [80, "http"], [445, "microsoft-ds"], [3306, "mysql"], [5432, "postgresql"], [8080, "http-proxy"]].map(([puerto, servicio], indice) => ({
   ...hallazgoDesdePuerto({ puerto, servicio, producto: "", version: "" }),
   id: `m${indice}`,
 }));
 
+// Marco común de las pantallas de login y registro: panel de marca a un lado y el formulario al otro.
 function Marco({ children, lado }) {
   return (
     <div className="auth">
@@ -39,6 +41,7 @@ function Marco({ children, lado }) {
   );
 }
 
+// Campo de contraseña con botón para mostrar u ocultar lo que escribo.
 function CampoPassword({ id, valor, onChange, autoComplete, etiqueta = "Contraseña", invalido }) {
   const [ver, setVer] = useState(false);
   return (
@@ -54,12 +57,14 @@ function CampoPassword({ id, valor, onChange, autoComplete, etiqueta = "Contrase
   );
 }
 
+// Cuentas de ejemplo que solo aparecen en el modo demostración (USE_MOCK). Con el backend real no existen.
 const DEMO = [
   { email: "admin@securescan.local", rotulo: "Administrador", nota: "Ve todo y gestiona usuarios" },
   { email: "analista@securescan.local", rotulo: "Analista", nota: "Solo sus proyectos" },
   { email: "usuario@securescan.local", rotulo: "Usuario nuevo", nota: "Sin datos, para ver estados vacíos" },
 ];
 
+// Pantalla de ingreso. Si ya hay sesión, redirige directo; si venía de otra página, vuelve a ella después de entrar (destino).
 export function Login() {
   useTitulo("Ingresar");
   const { user, login } = useAuth();
@@ -73,6 +78,7 @@ export function Login() {
 
   if (user) return <Navigate to={destino} replace />;
 
+  // Llama al login y, si el backend responde error (por ejemplo 401 o 429 de intentos fallidos), muestro ese mismo mensaje.
   const entrar = async (correo, clave) => {
     setError("");
     setCargando(true);
@@ -127,6 +133,7 @@ export function Login() {
   );
 }
 
+// Pantalla de registro. Valido en el navegador (mínimo 8 caracteres y que las contraseñas coincidan), pero igual el backend vuelve a validar.
 export function Registro() {
   useTitulo("Crear cuenta");
   const { user, registrar } = useAuth();
@@ -141,6 +148,7 @@ export function Registro() {
   const largo = formulario.password.length >= 8;
   const coincide = formulario.password.length > 0 && formulario.password === formulario.repetir;
 
+  // Si todo sale bien, aviso y mando al login con un mensaje de cuenta creada.
   const enviar = async (evento) => {
     evento.preventDefault();
     setError("");

@@ -7,6 +7,7 @@ import { useData } from "../context/DataContext.jsx";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { USE_MOCK } from "../services/index.js";
 
+// Un ítem del menú lateral. Puede llevar un contador (badge), por ejemplo las evaluaciones en curso o los hallazgos críticos.
 function Item({ to, icono, texto, badge, tono, fin }) {
   return (
     <NavLink to={to} end={fin} className={({ isActive }) => `nav-item ${isActive ? "on" : ""}`}>
@@ -17,6 +18,7 @@ function Item({ to, icono, texto, badge, tono, fin }) {
   );
 }
 
+// Estructura que se repite en todas las pantallas internas: menú lateral, barra superior con buscador y el contenido (Outlet).
 export function Layout() {
   const { user, salir } = useAuth();
   const { data, error, cargando, refrescar } = useData();
@@ -26,11 +28,13 @@ export function Layout() {
   const ubicacion = useLocation();
   const navegar = useNavigate();
 
+  // Cada vez que cambio de página cierro el menú (en el celular) y subo al inicio.
   useEffect(() => {
     setAbierto(false);
     window.scrollTo(0, 0);
   }, [ubicacion.pathname]);
 
+  // El buscador de arriba me manda a la pantalla de hallazgos con el texto como filtro (?q=...).
   const buscar = (evento) => {
     evento.preventDefault();
     navegar(`/hallazgos${busqueda.trim() ? `?q=${encodeURIComponent(busqueda.trim())}` : ""}`);
@@ -39,6 +43,7 @@ export function Layout() {
 
   const criticos = data?.conteoGlobal.critica || 0;
   const enCurso = data?.enCurso.length || 0;
+  // Solo el admin ve la sección Administración. Ojo: esto es solo para mostrar u ocultar el menú; el que de verdad protege es el backend.
   const esAdmin = user?.rol === "admin";
 
   return (
@@ -54,6 +59,7 @@ export function Layout() {
           </button>
         </div>
 
+        {/* Menú principal. Las secciones Usuarios y Configuración aparecen solo si el rol es admin. */}
         <nav className="nav">
           <Item to="/panel" icono="dashboard" texto="Panel" />
           <p className="nav-group">Análisis</p>

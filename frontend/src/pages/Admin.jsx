@@ -9,6 +9,8 @@ import { fmtFecha } from "../lib/format.js";
 import { ROLES } from "../lib/risk.js";
 import { USE_MOCK } from "../services/index.js";
 
+// Tabla que se muestra en pantalla con lo que puede hacer cada rol (Administrador, Analista, Usuario).
+// Ojo: hoy "analista" y "usuario" tienen los mismos permisos; solo el administrador tiene permisos extra.
 const PERMISOS = [
   ["Ver y gestionar sus propios proyectos, activos y evaluaciones", true, true, true],
   ["Generar reportes de sus proyectos", true, true, true],
@@ -17,6 +19,7 @@ const PERMISOS = [
   ["Cambiar la configuración de escaneo y de alcance", true, false, false],
 ];
 
+// El admin crea una cuenta; si no escribe contraseña, el backend genera una temporal que se muestra una sola vez (con botón para copiarla).
 function CrearUsuarioModal({ abierto, onClose }) {
   const { invitarUsuario } = useData();
   const [formulario, setFormulario] = useState({ nombre: "", email: "", rol: "usuario" });
@@ -90,6 +93,7 @@ function CrearUsuarioModal({ abierto, onClose }) {
   );
 }
 
+// Gestión de usuarios (solo admin): cambiar rol, activar o desactivar cuentas. Está envuelta en SoloAdmin, y además el backend responde 403 a quien no sea admin.
 export function Usuarios() {
   useTitulo("Usuarios y roles");
   const { user } = useAuth();
@@ -172,18 +176,21 @@ export function Usuarios() {
   );
 }
 
+// Perfiles de puertos que se pueden elegir en la configuración del escaneo.
 const PERFILES_PUERTOS = [
   ["predeterminado", "Predeterminado: puertos 1 a 1024 y servicios comunes"],
   ["rapido", "Rápido: los 100 puertos más comunes"],
   ["completo", "Completo: puertos 1 a 65535 (lento)"],
 ];
 
+// Configuración de la plataforma (solo admin): motores (Nmap, ZAP), perfil de puertos, tiempo máximo, retención y alcance (IPs públicas).
 export function Configuracion() {
   useTitulo("Configuración");
   const { data, guardarConfig, restablecer } = useData();
   const toast = useToast();
   const [configuracion, setConfiguracion] = useState(data.config);
   const [guardando, setGuardando] = useState(false);
+  // Copio la configuración del servidor a un estado local para poder editarla antes de guardar.
   useEffect(() => setConfiguracion(data.config), [data.config]);
 
   if (!configuracion) {
@@ -199,9 +206,11 @@ export function Configuracion() {
   const servidorPermitePublicas = configuracion.alcance.publicas_permitidas_por_servidor !== false; // en el modo de ejemplo no hay candado
   const nmap = configuracion.motores.nmap;
   const zap = configuracion.motores.zap;
+  // Funciones para cambiar un valor de ZAP o de Nmap sin perder el resto de la configuración.
   const setZap = (clave, valor) => setConfiguracion({ ...configuracion, motores: { ...configuracion.motores, zap: { ...zap, [clave]: valor } } });
   const setNmap = (clave, valor) => setConfiguracion({ ...configuracion, motores: { ...configuracion.motores, nmap: { ...nmap, [clave]: valor } } });
 
+  // Envía la configuración al backend; si el backend la rechaza (por ejemplo por el candado del servidor), muestro el motivo.
   const guardar = async () => {
     setGuardando(true);
     try {

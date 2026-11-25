@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+// Tema claro/oscuro. Puede ser "claro", "oscuro" o "sistema" (sigue la preferencia del computador). Se guarda en localStorage.
 const ThemeCtx = createContext(null);
 export const useTheme = () => useContext(ThemeCtx);
 

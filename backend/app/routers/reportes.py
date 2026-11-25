@@ -23,17 +23,20 @@ from app.security import obtener_usuario_actual
 router = APIRouter(tags=["Reportes"])
 
 
+# Carpeta donde se guardan los PDF (REPORTS_DIR en el .env). Si no existe, la creo.
 def _directorio() -> Path:
     carpeta = Path(os.getenv("REPORTS_DIR", "./reportes_generados"))
     carpeta.mkdir(parents=True, exist_ok=True)
     return carpeta
 
 
+# Convierte el nombre del proyecto en algo seguro para un nombre de archivo (sin tildes, espacios ni símbolos).
 def _slug(texto: str) -> str:
     texto_ascii = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", texto_ascii.lower()).strip("-") or "informe"
 
 
+# Un reporte pertenece a un proyecto, así que reviso la propiedad con la misma función de proyectos (dueño o admin).
 def _reporte_o_404(db: Session, reporte_id: str, usuario: Usuario) -> Reporte:
     reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
     if not reporte:
@@ -42,6 +45,7 @@ def _reporte_o_404(db: Session, reporte_id: str, usuario: Usuario) -> Reporte:
     return reporte
 
 
+# El usuario normal ve solo los reportes de sus proyectos; el admin ve todos.
 @router.get("/reportes", response_model=List[ReporteOut])
 def listar_reportes(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
     consulta = db.query(Reporte)
@@ -51,6 +55,7 @@ def listar_reportes(db: Session = Depends(get_db), usuario: Usuario = Depends(ob
     return consulta.order_by(Reporte.generado_en.desc()).all()
 
 
+# Genero el PDF en este momento y lo guardo: el informe es una "foto" de ese instante, aunque después cambien los hallazgos.
 @router.post("/proyectos/{proyecto_id}/reportes", response_model=ReporteOut, status_code=status.HTTP_201_CREATED)
 def crear_reporte(
     proyecto_id: str,
@@ -59,6 +64,7 @@ def crear_reporte(
     usuario: Usuario = Depends(obtener_usuario_actual),
 ):
     proyecto = _get_proyecto_or_404(db, proyecto_id, usuario)
+    # Saco las evaluaciones repetidas pero mantengo el orden en que las eligió el usuario.
     ids = list(dict.fromkeys(datos.evaluacion_ids))  # sin repetidos, conservando el orden
     evaluaciones = (
         db.query(Evaluacion)
@@ -66,8 +72,10 @@ def crear_reporte(
         .filter(Evaluacion.id.in_(ids), Activo.proyecto_id == proyecto_id)
         .all()
     )
+    # Valido que todas las evaluaciones existan y sean de ESTE proyecto, para que nadie meta evaluaciones ajenas en su reporte.
     if len(evaluaciones) != len(ids):
         raise HTTPException(status_code=400, detail="Alguna evaluación no existe o no pertenece a este proyecto")
+    # Solo se pueden incluir evaluaciones completadas.
     if any(e.estado != EstadoEvaluacion.COMPLETADA for e in evaluaciones):
         raise HTTPException(status_code=400, detail="Solo se pueden incluir evaluaciones completadas")
 
@@ -97,6 +105,7 @@ def crear_reporte(
         ],
     )
 
+    # Primero guardo el registro en la BD (para obtener su id) y con ese id escribo el archivo PDF.
     reporte = Reporte(
         proyecto_id=proyecto_id,
         titulo=titulo,
@@ -112,6 +121,7 @@ def crear_reporte(
     return reporte
 
 
+# El nombre del archivo en disco es el id del reporte, no un nombre que escriba el usuario. Así no hay riesgo de path traversal.
 @router.get("/reportes/{reporte_id}/descargar")
 def descargar_reporte(reporte_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
     reporte = _reporte_o_404(db, reporte_id, usuario)
@@ -121,6 +131,7 @@ def descargar_reporte(reporte_id: str, db: Session = Depends(get_db), usuario: U
     return FileResponse(ruta, media_type="application/pdf", filename=reporte.nombre_archivo)
 
 
+# Borro el registro y también el archivo del disco.
 @router.delete("/reportes/{reporte_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_reporte(reporte_id: str, db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
     reporte = _reporte_o_404(db, reporte_id, usuario)

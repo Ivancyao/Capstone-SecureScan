@@ -18,6 +18,7 @@ from app.security import obtener_usuario_actual
 router = APIRouter(prefix="/analisis", tags=["Análisis de URL y archivos"])
 
 
+# En el análisis rápido ni siquiera el admin ve los de otros: cada uno solo accede a los suyos. Si no es suyo, 404.
 def _propio_o_404(db: Session, analisis_id: str, usuario: Usuario) -> Analisis:
     analisis = db.get(Analisis, analisis_id)
     if analisis is None or analisis.usuario_id != usuario.id:
@@ -25,11 +26,13 @@ def _propio_o_404(db: Session, analisis_id: str, usuario: Usuario) -> Analisis:
     return analisis
 
 
+# La web llama a esto para saber si VirusTotal está configurado y cuál es el tamaño máximo de archivo.
 @router.get("/estado", response_model=AnalisisEstado)
 def estado(_: Usuario = Depends(obtener_usuario_actual)):
     return AnalisisEstado(virustotal=svc.virustotal_configurado(), max_mb=svc.MAX_ARCHIVO_BYTES // (1024 * 1024))
 
 
+# Devuelvo 202 (aceptado) al tiro y el análisis sigue en segundo plano, igual que las evaluaciones, porque VirusTotal puede demorar.
 @router.post("/url", response_model=AnalisisOut, status_code=status.HTTP_202_ACCEPTED)
 def analizar_url(datos: AnalisisUrlIn, tareas: BackgroundTasks, db: Session = Depends(get_db),
                  usuario: Usuario = Depends(obtener_usuario_actual)):
@@ -41,6 +44,7 @@ def analizar_url(datos: AnalisisUrlIn, tareas: BackgroundTasks, db: Session = De
     return analisis
 
 
+# El archivo se lee en memoria con un tope de tamaño (leo 1 byte más del máximo para detectar si se pasó) y no se guarda en disco ni en la BD, solo su huella SHA-256.
 @router.post("/archivo", response_model=AnalisisOut, status_code=status.HTTP_202_ACCEPTED)
 async def analizar_archivo(tareas: BackgroundTasks, archivo: UploadFile = File(...), subir: bool = Form(False),
                            db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
@@ -49,6 +53,7 @@ async def analizar_archivo(tareas: BackgroundTasks, archivo: UploadFile = File(.
         raise HTTPException(status_code=413, detail=f"El archivo supera el máximo de {svc.MAX_ARCHIVO_BYTES // (1024 * 1024)} MB.")
     if not contenido:
         raise HTTPException(status_code=422, detail="El archivo está vacío.")
+    # El nombre se corta a 255 caracteres. Se sube a VirusTotal únicamente si el usuario marcó la opción `subir`.
     nombre = (archivo.filename or "archivo")[:255]
     analisis = Analisis(usuario_id=usuario.id, tipo="archivo", objetivo=nombre, sha256=svc.sha256_de(contenido),
                  tamano_bytes=len(contenido), estado="pendiente")
@@ -59,6 +64,7 @@ async def analizar_archivo(tareas: BackgroundTasks, archivo: UploadFile = File(.
     return analisis
 
 
+# Máximo 100 análisis, del más nuevo al más antiguo.
 @router.get("", response_model=List[AnalisisOut])
 def listar(db: Session = Depends(get_db), usuario: Usuario = Depends(obtener_usuario_actual)):
     return (db.query(Analisis).filter(Analisis.usuario_id == usuario.id)

@@ -1,24 +1,35 @@
+# Con este archivo levanto todo el proyecto con un solo comando: docker compose up
+# Son 5 servicios: db (PostgreSQL), backend (FastAPI), frontend (React), zap (OWASP ZAP) y juiceshop (el objetivo de pruebas).
+# Las variables ${NOMBRE:-valor} se leen del archivo .env; si no existen, se usa el valor que va después de ":-".
 services:
+  # Base de datos. Guarda usuarios, proyectos, activos, evaluaciones, hallazgos, etc.
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-securescan}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securescan}
       POSTGRES_DB: ${POSTGRES_DB:-securescan}
+    # Volumen con nombre: los datos no se pierden al apagar o recrear el contenedor.
     volumes:
       - db_data:/var/lib/postgresql/data
+    # Aviso cuando Postgres ya acepta conexiones. El backend espera este aviso para arrancar (ver depends_on más abajo).
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securescan}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # La API en FastAPI (también ejecuta Nmap y habla con ZAP). Se construye con backend/Dockerfile.
   backend:
     build: ./backend
     environment:
+      # Dirección de la base de datos. El host "db" es el nombre del servicio de arriba: Docker lo resuelve solo.
       DATABASE_URL: postgresql://${POSTGRES_USER:-securescan}:${POSTGRES_PASSWORD:-securescan}@db:5432/${POSTGRES_DB:-securescan}
+      # Clave con la que se firman los tokens de sesión (JWT). Si queda vacía, la app genera una aleatoria al arrancar.
       SECRET_KEY: ${SECRET_KEY:-}
+      # Solo el frontend (puerto 5173) puede llamar a la API desde el navegador.
       CORS_ORIGINS: http://localhost:5173
+      # Carpeta donde se guardan los PDF; está montada en un volumen (ver más abajo).
       REPORTS_DIR: /code/reportes_generados
       # Candado del servidor: con "false", ninguna configuración web puede habilitar escaneos a IP públicas.
       ALLOW_PUBLIC_SCANS: ${ALLOW_PUBLIC_SCANS:-false}
@@ -29,27 +40,35 @@ services:
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
     volumes:
       - reportes_data:/code/reportes_generados   # los PDF sobreviven a reinicios
+    # Publico el 8000 para poder abrir la documentación de la API en http://localhost:8000/docs
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # solo visible desde tu propio equipo
+    # Orden de arranque: primero la base de datos lista (healthcheck) y ZAP iniciado, recién después el backend.
     depends_on:
       db:
         condition: service_healthy
       zap:
         condition: service_started
 
+  # La interfaz en React. Ojo: corre con el servidor de desarrollo de Vite (npm run dev), no con una versión compilada.
+  # Para producción habría que compilar con "vite build" y servirla con nginx; lo dejé como mejora futura.
   frontend:
     build: ./frontend
     environment:
+      # Dirección de la API vista desde el navegador (por eso es localhost y no el nombre "backend").
       VITE_API_URL: http://localhost:8000
       VITE_USE_MOCK: "false"   # usa la API real (con "true" la interfaz corre con datos de ejemplo)
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"   # solo visible desde tu propio equipo
     depends_on:
       - backend
 
   # OWASP ZAP en modo "daemon": solo el backend lo usa, por la red interna (no se publica ningún puerto).
   zap:
     image: ghcr.io/zaproxy/zaproxy:stable
+    # -daemon: sin interfaz gráfica, solo su API. -host 0.0.0.0: escucha dentro de la red de Docker.
+    # api.key: sin esa clave nadie puede usar la API de ZAP. Las líneas de api.addrs permiten las llamadas desde
+    # otros contenedores (el backend), que por defecto ZAP rechazaría.
     command: >
       zap.sh -daemon -host 0.0.0.0 -port 8080
       -config api.key=${ZAP_API_KEY:-cambia-esta-clave-de-zap}
@@ -57,11 +76,13 @@ services:
 
   # Aplicación vulnerable de laboratorio (OWASP Juice Shop): objetivo de pruebas AUTORIZADO.
   # Dentro de la red de Docker se registra como activo con la URL  http://juiceshop:3000
+  # Con este objetivo hice la validación real de ZAP (6 de noviembre de 2026: 4 hallazgos en 36 segundos).
   juiceshop:
     image: bkimminich/juice-shop
     ports:
       - "127.0.0.1:3001:3000"   # solo visible desde tu propio equipo
 
+# Volúmenes con nombre: db_data guarda la base de datos y reportes_data guarda los PDF generados.
 volumes:
   db_data:
   reportes_data:

@@ -1,8 +1,10 @@
 // Reglas de riesgo del front. Replican las del motor de riesgo del backend (risk.py)
 // para poder generar datos de ejemplo coherentes y explicar las bandas en pantalla.
 
+// Catálogo de textos y reglas que usa el frontend. Esta es la parte de la app donde se define cómo se ven la severidad, los estados y los roles.
 export const SEVERIDADES = ["critica", "alta", "media", "baja", "informativa"];
 
+// Cada severidad con su rango de puntaje CVSS y la acción que se recomienda. Se muestra en pantalla para explicar las bandas.
 export const SEV = {
   critica: { label: "Crítica", rango: "9,0 – 10,0", accion: "Corregir de inmediato" },
   alta: { label: "Alta", rango: "7,0 – 8,9", accion: "Corregir en el corto plazo" },
@@ -17,6 +19,7 @@ export const ordenSev = (severidad) => {
 };
 
 // Bandas oficiales de CVSS v3.1 (igual que el backend).
+// Misma conversión que hace el backend: <4 baja, <7 media, <9 alta, desde 9 crítica.
 export function sevDesdeCvss(cvss) {
   if (cvss == null || cvss <= 0) return "informativa";
   if (cvss < 4) return "baja";
@@ -45,6 +48,7 @@ export const HERRAMIENTAS = {
 };
 
 // ---------- OWASP Top 10 (2021) ----------
+// Las 10 categorías del OWASP Top 10 (2021), con su código para mostrarlas en el gráfico.
 export const OWASP = {
   A01: "Broken Access Control",
   A02: "Cryptographic Failures",
@@ -64,6 +68,7 @@ export const A05 = "A05:2021 - Security Misconfiguration";
 export const A01 = "A01:2021 - Broken Access Control";
 
 // ---------- Reglas por puerto/servicio (espejo de risk.py) ----------
+// Esta parte (reglas por puerto) solo se usa para los datos de ejemplo del modo demo; con la API real, esto lo calcula el backend (risk.py).
 const DB_PUERTOS = {
   1433: "Microsoft SQL Server",
   1521: "Oracle DB",
@@ -115,6 +120,7 @@ export function hallazgoDesdePuerto(puertoAbierto) {
 }
 
 // Extrae puerto y servicio desde la evidencia (formato del backend).
+// Saca el puerto y el servicio leyendo el texto de la evidencia. Lo usa el mapa de puertos.
 export function puertoDeHallazgo(hallazgo) {
   const coincidencia = /Puerto (\d+)\/(tcp|udp) abierto(?: — servicio: ([^\s(]+))?/.exec(hallazgo?.evidencia || "");
   if (!coincidencia) return null;
@@ -122,6 +128,7 @@ export function puertoDeHallazgo(hallazgo) {
 }
 
 // Puertos de interés que el mapa muestra siempre (abiertos o cerrados).
+// Puertos que el mapa muestra siempre, estén abiertos o cerrados, para que se vea qué quedó cerrado.
 export const PUERTOS_INTERES = [
   [21, "ftp"], [22, "ssh"], [23, "telnet"], [25, "smtp"], [53, "dns"],
   [80, "http"], [110, "pop3"], [139, "netbios"], [143, "imap"], [443, "https"],
@@ -155,6 +162,7 @@ export function hallazgoWeb(clave) {
 }
 
 // Conteo por severidad de una lista de hallazgos.
+// Cuenta los hallazgos por severidad. Se usa en casi todas las pantallas.
 export function contar(hallazgos = []) {
   const conteo = { critica: 0, alta: 0, media: 0, baja: 0, informativa: 0, total: 0 };
   hallazgos.forEach((hallazgo) => {
@@ -164,6 +172,7 @@ export function contar(hallazgos = []) {
   return conteo;
 }
 
+// Devuelve la severidad más alta de una lista (la que define el color del activo o proyecto).
 export function maxSeveridad(hallazgos = []) {
   let best = null;
   hallazgos.forEach((hallazgo) => {

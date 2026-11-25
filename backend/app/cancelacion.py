@@ -7,4 +7,5 @@ class EvaluacionCancelada(Exception):
 
 # La cancelación se guarda como estado FALLIDA + etapa "Cancelada": no exige cambiar el tipo
 # enumerado de la base de datos (en PostgreSQL habría que migrarlo) y la interfaz la muestra aparte.
+# Decisión: no creé un estado nuevo "cancelada". Uso "fallida" con esta etapa, y así evito migrar el enum en PostgreSQL.
 ETAPA_CANCELADA = "Cancelada"

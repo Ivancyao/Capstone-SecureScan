@@ -11,9 +11,11 @@ from typing import Dict
 
 from app.models import SeveridadHallazgo
 
+# Categorías del OWASP Top 10 (2021) que uso para clasificar los hallazgos de puertos.
 A02 = "A02:2021 - Cryptographic Failures"
 A05 = "A05:2021 - Security Misconfiguration"
 
+# Puertos típicos de bases de datos: si están abiertos hacia afuera, es un riesgo alto.
 DB_PUERTOS = {
     1433: "Microsoft SQL Server",
     1521: "Oracle DB",
@@ -25,6 +27,7 @@ DB_PUERTOS = {
 }
 
 
+# La severidad sale del puntaje CVSS usando las bandas oficiales de CVSS v3.1 (baja < 4, media < 7, alta < 9, crítica desde 9).
 def severidad_desde_cvss(cvss: float) -> SeveridadHallazgo:
     if cvss <= 0:
         return SeveridadHallazgo.INFORMATIVA
@@ -37,6 +40,9 @@ def severidad_desde_cvss(cvss: float) -> SeveridadHallazgo:
     return SeveridadHallazgo.CRITICA
 
 
+# Acá está la "base de conocimiento" del motor: una regla por tipo de servicio.
+# OJO, y es algo que sé que me van a preguntar: el CVSS es una estimación mía por tipo de servicio (por ejemplo 7.5 para RDP o bases de datos),
+# no el cálculo completo del vector. Sirve para priorizar, no es un puntaje oficial.
 def _regla(puerto: int, servicio: str):
     """Devuelve (nombre, owasp, cvss_estimado, recomendación) según el servicio."""
     servicio_en_minuscula = servicio.lower()
@@ -61,16 +67,19 @@ def _regla(puerto: int, servicio: str):
     if puerto == 5900 or servicio_en_minuscula == "vnc":
         return ("VNC expuesto", A05, 7.5,
                 "No exponer VNC directamente; usar túnel SSH o VPN.")
+    # HTTP sin cifrado es riesgo medio. Si ya es HTTPS, solo dejo una recomendación (CVSS 0).
     if servicio_en_minuscula.startswith("http") and "ssl" not in servicio_en_minuscula and "https" not in servicio_en_minuscula:
         return ("Servicio HTTP expuesto sin cifrado", A05, 5.3,
                 "Configurar HTTPS (TLS), redirigir HTTP a HTTPS y restringir servicios innecesarios.")
     if "https" in servicio_en_minuscula or "ssl" in servicio_en_minuscula:
         return ("Servicio HTTPS expuesto", A05, 0.0,
                 "Verificar la configuración TLS (versiones y cifrados vigentes) y renovar certificados a tiempo.")
+    # Si no calza con ninguna regla, igual lo registro como informativo para que el usuario sepa que ese puerto está abierto.
     return (f"Puerto {puerto}/tcp abierto ({servicio})", A05, 0.0,
             "Confirmar que el servicio es necesario; si no lo es, cerrar el puerto.")
 
 
+# Toma un puerto que encontró Nmap y arma los datos del hallazgo (nombre, severidad, evidencia y recomendación).
 def clasificar_puerto(p: Dict) -> Dict:
     """Convierte un puerto abierto (dict del escáner) en los campos de un Hallazgo."""
     nombre, owasp, cvss, recomendacion = _regla(p["puerto"], p["servicio"])

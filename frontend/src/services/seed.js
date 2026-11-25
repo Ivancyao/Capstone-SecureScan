@@ -6,6 +6,7 @@ const hace = (dias, horas = 0) => new Date(Date.now() - dias * DIA - horas * 360
 const crearPuerto = (puerto, servicio, producto = "", version = "") => ({ puerto, servicio, producto, version });
 
 // Perfil de cada activo: qué puertos tiene abiertos hoy (usado también por los escaneos simulados).
+// Cada activo de ejemplo tiene un perfil de puertos abiertos; con eso se generan evaluaciones y hallazgos de ejemplo.
 const PERFILES = {
   a1: { puertos: [crearPuerto(3000, "http", "Node.js Express framework")], web: ["csp", "xss", "sqli"] },
   a2: { puertos: [crearPuerto(22, "ssh", "OpenSSH", "5.9p1"), crearPuerto(80, "http", "Apache httpd", "2.4.7"), crearPuerto(3306, "mysql", "MySQL", "5.5.62")], web: ["csrf", "version_servidor", "sqli"] },
@@ -52,6 +53,7 @@ function construirEvaluacion(definicion, idx) {
   return { ...base, estado: "completada", detalle_error: null, hallazgos };
 }
 
+// Arma la base de ejemplo completa: usuarios, proyectos, activos, evaluaciones y reportes ficticios.
 export function construirSeed() {
   return {
     version: 1,

@@ -12,6 +12,7 @@ from app.models import RolUsuario, Usuario
 from app.schemas import UsuarioAdminCreate, UsuarioCreado, UsuarioOut, UsuarioUpdate
 from app.security import exigir_roles, hashear_contrasena
 
+# Todo este router es solo para ADMIN: cada endpoint usa exigir_roles(RolUsuario.ADMIN).
 router = APIRouter(prefix="/usuarios", tags=["Usuarios (solo administrador)"])
 
 
@@ -30,6 +31,7 @@ def crear_usuario(
 ):
     if db.query(Usuario).filter(Usuario.email == datos.email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
+    # Si el admin no escribe contraseña, genero una aleatoria y se la muestro una sola vez en la respuesta.
     temporal = None
     contrasena = datos.password
     if not contrasena:
@@ -58,6 +60,7 @@ def actualizar_usuario(
     objetivo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not objetivo:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    # Protección: el admin no puede quitarse su propio rol ni desactivarse, para no quedarme sin administradores.
     if objetivo.id == admin.id:
         # Evita que el último administrador se quite el rol o se desactive por error.
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol ni desactivar tu propia cuenta")

@@ -1,7 +1,10 @@
 // Cliente de la API real (FastAPI). Mismo contrato que mock.js: las pantallas no saben cuál usan.
+// Dirección del backend. En desarrollo es localhost:8000; se cambia con VITE_API_URL.
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const TOKEN = "token";
 
+// El token JWT lo guardo en localStorage. Lo sé: es el compromiso habitual de una SPA (si hubiera XSS se podría robar).
+// Lo mitigo no usando dangerouslySetInnerHTML ni eval en ninguna parte. Todo va en try/catch porque localStorage puede estar bloqueado.
 const getToken = () => {
   try {
     return localStorage.getItem(TOKEN);
@@ -24,9 +27,11 @@ const clearToken = () => {
   }
 };
 
+// Bandera para que, si fallan varias consultas a la vez por token vencido, solo redirija una vez al login.
 let redirigiendo = false; // evita lanzar la redirección varias veces si fallan varias consultas a la vez
 let rolActual = null; // se recuerda al pedir /auth/me, para saber si se puede listar usuarios
 
+// Función base de todas las llamadas: agrega el token en la cabecera y arma el cuerpo según el caso (JSON, formulario del login o archivo).
 async function llamar(path, { method = "GET", body, form, multipart } = {}) {
   const headers = {};
   const token = getToken();
@@ -47,12 +52,14 @@ async function llamar(path, { method = "GET", body, form, multipart } = {}) {
   }
 }
 
+// FastAPI devuelve el error en `detail` (texto o lista); lo convierto a un mensaje legible para mostrarlo en pantalla.
 async function errorDe(respuesta) {
   const err = await respuesta.json().catch(() => ({}));
   const detail = Array.isArray(err.detail) ? err.detail.map((problema) => problema.msg).join(", ") : err.detail;
   return new Error(detail || `Error ${respuesta.status}`);
 }
 
+// Si el servidor responde 401 con token guardado (vencido o cuenta desactivada), cierro la sesión local y mando al login.
 async function request(path, opciones) {
   const respuesta = await llamar(path, opciones);
   if (!respuesta.ok) {
@@ -69,6 +76,7 @@ async function request(path, opciones) {
   return respuesta.json();
 }
 
+// Aquí está cada operación que puede hacer la app, una por endpoint. Las pantallas llaman a estas funciones y no saben nada de URLs.
 export const http = {
   modo: "api",
 
@@ -90,6 +98,8 @@ export const http = {
   hayToken: () => !!getToken(),
 
   // Estado completo en pocas consultas, todas en paralelo.
+  // Cargo todo lo que necesitan las pantallas en paralelo con Promise.all (más rápido que una por una).
+  // La lista de usuarios solo se pide si el rol es admin.
   async snapshot() {
     if (!rolActual) await this.me();
     const [proyectos, activos, evaluaciones, reportes, config, usuarios, metricas] = await Promise.all([
@@ -138,6 +148,7 @@ export const http = {
   eliminarAnalisis: (id) => request(`/analisis/${id}`, { method: "DELETE" }),
   eliminarReporte: (id) => request(`/reportes/${id}`, { method: "DELETE" }),
   // El PDF exige el token, así que se baja con fetch y se entrega al navegador como archivo.
+  // El PDF exige el token, así que no puedo usar un enlace normal: lo descargo con fetch, creo un enlace temporal en memoria y le hago clic por código.
   async descargarReporte(reporte) {
     const respuesta = await llamar(`/reportes/${reporte.id}/descargar`);
     if (!respuesta.ok) throw await errorDe(respuesta);

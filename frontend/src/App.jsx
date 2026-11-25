@@ -17,6 +17,8 @@ import { Reportes, ReporteVista } from "./pages/Reportes.jsx";
 import { Usuarios, Configuracion } from "./pages/Admin.jsx";
 import { Perfil, Ayuda } from "./pages/Cuenta.jsx";
 
+// Guardia de rutas: si no hay sesión, mando al login y me guardo a qué página quería entrar para volver ahí después.
+// Si la persona cerró sesión a propósito (salidaManual), no guardo esa página.
 function RequireAuth({ children }) {
   const { user, cargando, salidaManual } = useAuth();
   const ubicacion = useLocation();
@@ -25,6 +27,7 @@ function RequireAuth({ children }) {
   return children;
 }
 
+// Pantalla para rutas inexistentes. Un recurso de otro usuario también cae acá, porque el backend responde 404 y no 403.
 function NotFound() {
   useTitulo("Página no encontrada");
   const { user } = useAuth();
@@ -38,6 +41,8 @@ function NotFound() {
   );
 }
 
+// Mapa de rutas. Las públicas (inicio, login, registro) van sueltas; todo lo demás está dentro de RequireAuth, así sin sesión no se puede entrar.
+// DataProvider carga los datos una sola vez para todas las pantallas.
 export default function App() {
   return (
     <Routes>

@@ -10,6 +10,7 @@ import { HERRAMIENTAS, SEV, SEVERIDADES, ordenSev, owaspCodigo } from "../lib/ri
 import { fmtCvss, fmtFecha, hace, plural } from "../lib/format.js";
 
 // ---------- Recurso inexistente (o ajeno): se responde igual que el backend, con "no encontrado" ----------
+// Pantalla para cuando un recurso no existe o es de otro usuario (el backend responde 404 en ambos casos, así que se ve igual).
 export function NoEncontrado({ que = "El recurso", volver = "/panel", etiqueta = "Volver al panel" }) {
   return (
     <div className="panel">
@@ -18,6 +19,7 @@ export function NoEncontrado({ que = "El recurso", volver = "/panel", etiqueta =
   );
 }
 
+// Envoltorio para pantallas de administración. Si el rol no es admin, muestra "Acceso restringido". La protección real está en el backend (403).
 export function SoloAdmin({ children }) {
   const { user } = useAuth();
   if (user?.rol !== "admin") {
@@ -30,6 +32,7 @@ export function SoloAdmin({ children }) {
   return children;
 }
 
+// Copia un texto al portapapeles y muestra "Copiado" un momento.
 export function CopiarBoton({ texto, etiqueta = "Copiar" }) {
   const [ok, setOk] = useState(false);
   return (
@@ -71,6 +74,7 @@ export function ResumenSeveridad({ conteo }) {
 }
 
 // ---------- Tabla de hallazgos (usada en panel, activo, evaluación y hallazgos) ----------
+// Tabla reutilizable de hallazgos; la usan varias pantallas.
 export function TablaHallazgos({ hallazgos, mostrarActivo = false, mostrarFecha = false, vacio = "Sin hallazgos." }) {
   const navegar = useNavigate();
   const orden = [...hallazgos].sort((primero, segundo) => ordenSev(primero.severidad) - ordenSev(segundo.severidad) || (segundo.cvss_score ?? 0) - (primero.cvss_score ?? 0));
@@ -119,6 +123,7 @@ export function TablaHallazgos({ hallazgos, mostrarActivo = false, mostrarFecha 
 export const nombreHerramienta = (herramienta) => HERRAMIENTAS[herramienta] || herramienta || "—";
 
 // ---------- Botón para iniciar una evaluación y seguirla en vivo ----------
+// Botón para lanzar una evaluación. Si ya hay una corriendo, en vez de lanzar otra lleva a verla en vivo.
 export function EvaluarBoton({ activo, grande = false, pequeno = false, texto = "Evaluar ahora" }) {
   const { iniciarEvaluacion } = useData();
   const navegar = useNavigate();
@@ -151,6 +156,7 @@ export function EvaluarBoton({ activo, grande = false, pequeno = false, texto = 
 }
 
 // ---------- Formularios en diálogo ----------
+// Formularios en ventana para crear un proyecto y registrar un activo.
 export function ProyectoModal({ abierto, onClose }) {
   const { crearProyecto } = useData();
   const navegar = useNavigate();
@@ -254,6 +260,7 @@ export function ActivoModal({ abierto, onClose, proyectoId }) {
 }
 
 // ---------- Tarjetas (toda la tarjeta lleva al detalle; el botón de evaluar queda por encima) ----------
+// Tarjetas de resumen que se usan en las listas de activos y proyectos.
 export function TarjetaActivo({ activo, mostrarProyecto = true }) {
   const navegar = useNavigate();
   return (

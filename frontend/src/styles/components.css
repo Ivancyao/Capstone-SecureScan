@@ -1,3 +1,5 @@
+/* Componentes reutilizables: paneles, insignias, tablas, diálogos, avisos, gráficos y el mapa de puertos. */
+
 /* ---------- Paneles y secciones ---------- */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); }
 /* Tres niveles: el panel protagonista (borde con luz), el panel normal y el panel plano (solo filo superior) */
@@ -240,6 +242,7 @@ button.pm:hover { transform: translateY(-2px); border-color: var(--ink); }
 /* ---------- Código / evidencia ---------- */
 .codeblock { margin: 0; padding: 12px 14px; background: var(--surface-3); border: 1px solid var(--line); border-radius: var(--r-control); font-family: var(--font-code); font-size: var(--t-sm); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
 
+/* Al imprimir se oculta la navegación para que quede solo el contenido. */
 @media print {
   .no-print { display: none !important; }
 }

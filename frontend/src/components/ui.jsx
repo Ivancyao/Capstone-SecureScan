@@ -4,6 +4,7 @@ import { Icon } from "./Icon.jsx";
 import { ESTADOS, ROLES, SEV } from "../lib/risk.js";
 import { iniciales } from "../lib/format.js";
 
+// Cambia el título de la pestaña del navegador según la pantalla.
 export function useTitulo(titulo) {
   useEffect(() => {
     document.title = titulo ? `${titulo} · SecureScan` : "SecureScan";
@@ -28,6 +29,8 @@ export function Logo({ size = 30, texto = true, claro = false }) {
 }
 
 // ---------- Severidad: color + forma + texto (nunca solo color) ----------
+// Decisión de accesibilidad: cada severidad tiene su color, su forma (rombo, triángulo, cuadrado, círculo) y su texto, para que no dependa solo del color
+// (una persona con daltonismo igual la distingue).
 export function SevMark({ sev, size = 12 }) {
   const color = `var(--sev-${sev})`;
   const tamano = size;
@@ -211,12 +214,14 @@ export function Campo({ etiqueta, ayuda, error, children, id }) {
 }
 
 // ---------- Diálogo ----------
+// Ventana de diálogo accesible: se cierra con Escape, el foco queda atrapado adentro con Tab y al cerrar vuelve al elemento que la abrió.
 export function Modal({ abierto, onClose, titulo, descripcion, children, pie, ancho = 520 }) {
   const ref = useRef(null);
   const tid = useId();
   useEffect(() => {
     if (!abierto) return;
     const previo = document.activeElement;
+    // Manejo del teclado: Escape cierra, y Tab/Shift+Tab da la vuelta dentro del diálogo en vez de salirse.
     const onKey = (evento) => {
       if (evento.key === "Escape") onClose();
       if (evento.key === "Tab" && ref.current) {
@@ -266,6 +271,7 @@ export function Modal({ abierto, onClose, titulo, descripcion, children, pie, an
 }
 
 // ---------- Cifra que sube hasta su valor (una sola vez al montar; sin animación si se prefiere menos movimiento) ----------
+// Número que sube animado hasta su valor. Respeta la preferencia del sistema de reducir movimiento.
 export function Contador({ valor, duracion = 700 }) {
   const [valorMostrado, setValorMostrado] = useState(0);
   useEffect(() => {
@@ -287,6 +293,7 @@ export function Contador({ valor, duracion = 700 }) {
 }
 
 // ---------- Tarjeta de cifra clave: toda ella es un enlace ----------
+// Tarjeta con una cifra clave del panel; toda la tarjeta es un enlace a la sección relacionada.
 export function TarjetaKpi({ to, icono, etiqueta, valor, pie, tono = "var(--accent)" }) {
   return (
     <Link to={to} className="kpi" style={{ "--kpi-c": tono }}>

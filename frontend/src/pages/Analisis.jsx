@@ -5,6 +5,7 @@ import { useToast } from "../context/ToastContext.jsx";
 import { fmtFechaHora, fmtKb, hace } from "../lib/format.js";
 import { api } from "../services/index.js";
 
+// Textos y estilo de cada veredicto. Nunca uso la palabra "seguro": "limpio" significa solo que no hubo detecciones.
 const VEREDICTOS = {
   malicioso: { texto: "Peligroso", color: "var(--sev-critica)", fondo: "var(--sev-critica-bg)", icono: "alert" },
   sospechoso: { texto: "Sospechoso", color: "var(--sev-media)", fondo: "var(--sev-media-bg)", icono: "alert" },
@@ -14,6 +15,7 @@ const VEREDICTOS = {
 const NIVEL_SEV = { alto: "alta", medio: "media", bajo: "baja" };
 const SEV_CAB = { alta: "alta", media: "media", baja: "baja" };
 
+// Etiqueta visual del veredicto (limpio, sospechoso, malicioso o sin datos).
 function Veredicto({ valor, grande = false }) {
   const estiloVeredicto = VEREDICTOS[valor] || VEREDICTOS.sin_datos;
   return (
@@ -24,6 +26,7 @@ function Veredicto({ valor, grande = false }) {
   );
 }
 
+// Muestra el resultado completo: veredicto, detecciones de VirusTotal, señales locales y cabeceras de seguridad.
 function Resultado({ analisis }) {
   const detalle = analisis.detalle || {};
   const virustotal = detalle.virustotal;
@@ -119,6 +122,7 @@ function Resultado({ analisis }) {
   );
 }
 
+// Pantalla del análisis rápido: se pega una URL o se sube un archivo y se revisa con VirusTotal más señales locales.
 export function Analisis() {
   useTitulo("Análisis rápido");
   const toast = useToast();
@@ -132,6 +136,7 @@ export function Analisis() {
   const [actual, setActual] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const inputRef = useRef(null);
+  // Guarda el temporizador del polling para poder cancelarlo al salir de la pantalla.
   const sondeo = useRef(null);
 
   const cargarHistorial = useCallback(async () => {
@@ -148,6 +153,7 @@ export function Analisis() {
     return () => clearTimeout(sondeo.current);
   }, [cargarHistorial]);
 
+  // El análisis corre en segundo plano en el backend, así que consulto su estado cada 1,5 segundos hasta que deje de estar pendiente.
   const seguir = useCallback(
     (id) => {
       const paso = async () => {
@@ -170,6 +176,7 @@ export function Analisis() {
     [cargarHistorial, toast]
   );
 
+  // Envía la URL o el archivo. Si el backend responde "pendiente", empiezo a seguirlo; si ya terminó, muestro el resultado.
   const analizar = async (evento) => {
     evento.preventDefault();
     clearTimeout(sondeo.current);
@@ -189,6 +196,7 @@ export function Analisis() {
     }
   };
 
+  // Valido el tamaño del archivo en el navegador antes de enviarlo (el backend también lo valida).
   const elegir = (archivoElegido) => {
     if (!archivoElegido) return;
     if (estado && archivoElegido.size > estado.max_mb * 1024 * 1024) {

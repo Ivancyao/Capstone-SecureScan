@@ -4,6 +4,8 @@ import { construirSeed } from "./seed.js";
 import { hallazgoDesdePuerto, hallazgoWeb } from "../lib/risk.js";
 import { hostDe, uid } from "../lib/format.js";
 
+// Modo demo: toda esta "API" vive en el navegador (localStorage) y no habla con ningún servidor. Me sirvió para diseñar las pantallas antes de tener el backend
+// y para poder mostrar la app aunque no haya internet. En la defensa se usa la API real, no esto.
 const KEY = "securescan-demo-v1";
 const TOKEN = "securescan-token";
 
@@ -28,6 +30,7 @@ function guardar() {
     /* ignorar */
   }
 }
+// Guarda un análisis simulado (sin VirusTotal).
 function guardarAnalisis(usuario, { tipo, objetivo, tamano_bytes = null, senales, veredicto }) {
   const frases = {
     malicioso: "Peligroso: se detectó una firma de malware conocida.",
@@ -43,6 +46,7 @@ function guardarAnalisis(usuario, { tipo, objetivo, tamano_bytes = null, senales
   guardar();
   return clon(analisis);
 }
+// Pequeña demora para que se sienta como una llamada real.
 const esperar = (milisegundos = 220) => new Promise((terminar) => setTimeout(terminar, milisegundos));
 const clon = (valor) => JSON.parse(JSON.stringify(valor));
 const fallo = (msg) => {
@@ -67,6 +71,7 @@ const publico = ({ password, ...usuarioSinClave }) => usuarioSinClave;
 
 // ---------- Simulación de escaneo ----------
 const esIPv4 = (host) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+// Versión simplificada de la regla del backend para decidir si se "escanea" un host en el modo demo.
 function esPrivada(host) {
   if (host === "localhost") return true;
   if (!esIPv4(host)) return /(\.local|\.lab|\.duoc\.cl)$/i.test(host) || !host.includes(".");
@@ -95,6 +100,7 @@ function etapaDe(pct) {
 }
 
 // Avanza el estado de las evaluaciones simuladas según el tiempo transcurrido.
+// Simula el avance de un escaneo según el tiempo transcurrido.
 function resolver(evaluacion) {
   const sim = evaluacion._sim;
   if (!sim) return evaluacion;
@@ -128,6 +134,7 @@ function resolver(evaluacion) {
 }
 
 // ---------- Visibilidad por rol (propiedad de proyectos, como en el backend) ----------
+// Igual que en el backend real: cada usuario ve lo suyo y el admin ve todo.
 function visibles(usuario) {
   const proyectos = baseDeDatos.proyectos.filter((proyecto) => usuario.rol === "admin" || proyecto.propietario_id === usuario.id);
   const ids = new Set(proyectos.map((proyecto) => proyecto.id));
@@ -138,6 +145,7 @@ function visibles(usuario) {
   return { proyectos, activos, evaluaciones, reportes };
 }
 
+// Mismas funciones que http.js, así las pantallas no notan la diferencia.
 export const mock = {
   modo: "demo",
 

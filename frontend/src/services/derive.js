@@ -2,9 +2,11 @@
 // semana vienen de GET /metricas (consultas GROUP BY en la base). Aquí quedan como respaldo para el modo de ejemplo.
 import { contar, maxSeveridad, ordenSev, SEVERIDADES, owaspCodigo, OWASP } from "../lib/risk.js";
 
+// Una evaluación está "en curso" si sigue pendiente o en progreso.
 const enCurso = (evaluacion) => evaluacion.estado === "pendiente" || evaluacion.estado === "en_progreso";
 const porFechaDesc = (primera, segunda) => new Date(segunda.iniciada_en) - new Date(primera.iniciada_en);
 
+// Devuelve el lunes de la semana de una fecha (para agrupar la tendencia por semana).
 function inicioSemana(fecha) {
   const inicio = new Date(fecha);
   inicio.setHours(0, 0, 0, 0);
@@ -14,6 +16,7 @@ function inicioSemana(fecha) {
 }
 
 // Con la API real, estas cifras llegan ya agregadas desde la base de datos (GET /metricas).
+// Con el backend real, los totales ya vienen calculados en la base de datos; acá solo los dejo en el formato que usan los gráficos.
 function desdeMetricas(metricas) {
   const conteoGlobal = { ...metricas.por_severidad, total: Object.values(metricas.por_severidad).reduce((suma, valor) => suma + valor, 0) };
   const porCodigo = {};
@@ -31,6 +34,8 @@ function desdeMetricas(metricas) {
   return { conteoGlobal, porOwasp, semanas };
 }
 
+// Esta función arma todos los datos "cocinados" que usan las pantallas a partir de lo que entrega el backend (proyectos, activos, evaluaciones...).
+// La idea es calcular acá una sola vez (conteos, última evaluación, hallazgos vigentes) y que cada pantalla solo los muestre.
 export function derive(snap) {
   if (!snap) return null;
   const proyectosPorId = Object.fromEntries(snap.proyectos.map((proyecto) => [proyecto.id, proyecto]));
@@ -52,6 +57,7 @@ export function derive(snap) {
       };
     });
 
+  // Por cada activo calculo su última evaluación, la última completada, los hallazgos abiertos y la serie para el gráfico pequeño.
   const activos = snap.activos.map((activo) => {
     const evaluacionesDelActivo = evaluaciones.filter((evaluacion) => evaluacion.activo_id === activo.id);
     const ultima = evaluacionesDelActivo[0] || null;
@@ -73,6 +79,7 @@ export function derive(snap) {
   });
   const activoPorId = Object.fromEntries(activos.map((activo) => [activo.id, activo]));
 
+  // Importante: un hallazgo es "vigente" solo si pertenece a la ÚLTIMA evaluación completada de su activo. Los anteriores son historial y no cuentan como riesgo actual.
   // Hallazgos aplanados. "vigente" = pertenece a la última evaluación completada de su activo.
   const hallazgos = [];
   evaluaciones.forEach((evaluacion) => {
@@ -107,6 +114,7 @@ export function derive(snap) {
     };
   });
 
+  // "Abiertos" = vigentes y no marcados como corregidos. Es el número de riesgo que se muestra en el panel.
   const abiertos = hallazgos.filter((hallazgo) => hallazgo.vigente && hallazgo.corregido !== "si");
   const corregidos = hallazgos.filter((hallazgo) => hallazgo.vigente && hallazgo.corregido === "si");
   const conteoGlobal = contar(abiertos);
@@ -140,10 +148,12 @@ export function derive(snap) {
     });
   });
 
+  // Los activos que más atención necesitan: primero los de mayor severidad y, si empatan, los que tienen más hallazgos abiertos.
   const activosAtencion = activos
     .filter((activo) => activo.abiertos.length > 0)
     .sort((primero, segundo) => ordenSev(primero.maxSev) - ordenSev(segundo.maxSev) || segundo.abiertos.length - primero.abiertos.length);
 
+  // Si el backend entregó métricas agregadas, uso esas; si no (modo de ejemplo), uso mi cálculo local.
   const agregadas = snap.metricas ? desdeMetricas(snap.metricas) : null;
 
   return {
